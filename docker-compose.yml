@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 資料庫服務
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: quiz_postgres
+    environment:
+      POSTGRES_DB: quiz_db
+      POSTGRES_USER: quiz_user
+      POSTGRES_PASSWORD: quiz_password_2024
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz_user -d quiz_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Redis 快取服務 (可選)
+  redis:
+    image: redis:7-alpine
+    container_name: quiz_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Django 應用服務
+  web:
+    build: .
+    container_name: quiz_web
+    environment:
+      # 資料庫設定
+      DB_NAME: quiz_db
+      DB_USER: quiz_user
+      DB_PASSWORD: quiz_password_2024
+      DB_HOST: db
+      DB_PORT: 5432
+      
+      # Django 設定
+      SECRET_KEY: your_very_secret_key_here_change_in_production
+      DEBUG: "True"
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
+      
+      # Redis 設定
+      REDIS_URL: redis://redis:6379/0
+      
+      # Ollama 設定
+      OLLAMA_MODEL: gemma3:4b
+      OLLAMA_BASE_URL: http://ollama:11434
+      
+      # 其他設定
+      TIME_ZONE: Asia/Taipei
+      LANGUAGE_CODE: zh-hant
+    volumes:
+      - ./media:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Ollama AI 模型服務
+  ollama:
+    image: ollama/ollama:latest
+    container_name: quiz_ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_ORIGINS=*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # Nginx 反向代理 (可選，用於生產環境)
+  nginx:
+    image: nginx:alpine
+    container_name: quiz_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./staticfiles:/app/staticfiles:ro
+      - ./media:/app/media:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  default:
+    name: quiz_network
+    driver: bridge
