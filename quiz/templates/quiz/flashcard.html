@@ -1,0 +1,355 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}閃卡答題 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <!-- 進度顯示 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">閃卡進度</span>
+                    <span class="text-muted"><span id="currentCount">0</span> / {{ questions|length }}</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 閃卡容器 -->
+        <div class="flashcard-container">
+            <div class="flashcard" id="flashcard">
+                <div class="flashcard-inner">
+                    <!-- 正面 - 題目 -->
+                    <div class="flashcard-front">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                <h5 class="card-title mb-4" id="questionText">
+                                    點擊開始答題
+                                </h5>
+                                <p class="text-muted">左滑：錯誤 | 右滑：正確</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 背面 - 答案 -->
+                    <div class="flashcard-back">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                <div id="answerResult" class="mb-3">
+                                    <i class="fas fa-check-circle fa-3x text-success"></i>
+                                    <h5 class="mt-2">正確！</h5>
+                                </div>
+                                <div id="explanation" class="text-muted">
+                                    <!-- 解釋內容 -->
+                                </div>
+                                <button class="btn btn-primary mt-3" onclick="nextCard()">
+                                    下一題
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 操作按鈕 -->
+        <div class="row mt-4" id="actionButtons">
+            <div class="col-6">
+                <button class="btn btn-danger w-100" onclick="answerCard(false)">
+                    <i class="fas fa-times"></i><br>
+                    錯誤
+                </button>
+            </div>
+            <div class="col-6">
+                <button class="btn btn-success w-100" onclick="answerCard(true)">
+                    <i class="fas fa-check"></i><br>
+                    正確
+                </button>
+            </div>
+        </div>
+        
+        <!-- 統計資料 -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="h4 text-success" id="correctCount">0</div>
+                        <small class="text-muted">正確</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="h4 text-danger" id="wrongCount">0</div>
+                        <small class="text-muted">錯誤</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="h4 text-primary" id="accuracy">0%</div>
+                        <small class="text-muted">準確率</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 完成畫面 -->
+        <div class="card mt-4 d-none" id="completionCard">
+            <div class="card-body text-center">
+                <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
+                <h4>閃卡完成！</h4>
+                <p class="text-muted">恭喜您完成了所有閃卡題目</p>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'quiz_result' session.id %}" class="btn btn-primary">
+                        查看詳細結果
+                    </a>
+                    <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                        返回首頁
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 題目資料 -->
+<script>
+const questions = {{ questions|safe }};
+const sessionId = {{ session.id }};
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .flashcard-container {
+        perspective: 1000px;
+        height: 400px;
+        margin-bottom: 20px;
+    }
+    
+    .flashcard {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        text-align: center;
+        transition: transform 0.6s;
+        transform-style: preserve-3d;
+        cursor: grab;
+    }
+    
+    .flashcard.flipped {
+        transform: rotateY(180deg);
+    }
+    
+    .flashcard-front, .flashcard-back {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        backface-visibility: hidden;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .flashcard-back {
+        transform: rotateY(180deg);
+    }
+    
+    .flashcard.swipe-left {
+        transform: translateX(-100vw) rotate(-30deg);
+        opacity: 0;
+    }
+    
+    .flashcard.swipe-right {
+        transform: translateX(100vw) rotate(30deg);
+        opacity: 0;
+    }
+    
+    .btn-danger, .btn-success {
+        border-radius: 50px;
+        padding: 15px;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-danger:active, .btn-success:active {
+        transform: scale(0.95);
+    }
+    
+    .card-body {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(247, 249, 252, 0.9) 100%);
+    }
+    
+    /* 手機滑動指示 */
+    @media (max-width: 768px) {
+        .flashcard-container::before {
+            content: '← 左滑錯誤 | 右滑正確 →';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: #6c757d;
+            z-index: 10;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentIndex = 0;
+let correctCount = 0;
+let wrongCount = 0;
+let touchStartX = 0;
+let touchEndX = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+    showQuestion();
+    setupTouchEvents();
+});
+
+function showQuestion() {
+    if (currentIndex >= questions.length) {
+        completeFlashcard();
+        return;
+    }
+    
+    const question = questions[currentIndex];
+    document.getElementById('questionText').textContent = question.question_text;
+    updateProgress();
+}
+
+function answerCard(isCorrect) {
+    const question = questions[currentIndex];
+    const correctAnswer = question.options.find(opt => opt.is_correct);
+    const userAnswer = isCorrect ? '正確' : '錯誤';
+    const actuallyCorrect = (isCorrect && correctAnswer.text === '正確') || 
+                           (!isCorrect && correctAnswer.text === '錯誤');
+    
+    // 動畫效果
+    const flashcard = document.getElementById('flashcard');
+    flashcard.classList.add(isCorrect ? 'swipe-right' : 'swipe-left');
+    
+    // 顯示結果
+    setTimeout(() => {
+        showResult(actuallyCorrect, question.explanation);
+        // 提交答案到後端
+        submitAnswer(currentIndex, userAnswer);
+    }, 300);
+}
+
+function showResult(isCorrect, explanation) {
+    const flashcard = document.getElementById('flashcard');
+    const resultIcon = document.querySelector('#answerResult i');
+    const resultText = document.querySelector('#answerResult h5');
+    const explanationEl = document.getElementById('explanation');
+    
+    // 重置動畫
+    flashcard.classList.remove('swipe-left', 'swipe-right');
+    
+    // 設定結果顯示
+    if (isCorrect) {
+        resultIcon.className = 'fas fa-check-circle fa-3x text-success';
+        resultText.textContent = '正確！';
+        correctCount++;
+    } else {
+        resultIcon.className = 'fas fa-times-circle fa-3x text-danger';
+        resultText.textContent = '錯誤！';
+        wrongCount++;
+    }
+    
+    explanationEl.textContent = explanation || '';
+    
+    // 翻轉卡片
+    flashcard.classList.add('flipped');
+    
+    // 更新統計
+    updateStats();
+}
+
+function nextCard() {
+    const flashcard = document.getElementById('flashcard');
+    flashcard.classList.remove('flipped');
+    
+    currentIndex++;
+    setTimeout(showQuestion, 300);
+}
+
+function updateProgress() {
+    const progress = (currentIndex / questions.length) * 100;
+    document.getElementById('progressBar').style.width = progress + '%';
+    document.getElementById('currentCount').textContent = currentIndex + 1;
+}
+
+function updateStats() {
+    document.getElementById('correctCount').textContent = correctCount;
+    document.getElementById('wrongCount').textContent = wrongCount;
+    
+    const total = correctCount + wrongCount;
+    const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+    document.getElementById('accuracy').textContent = accuracy + '%';
+}
+
+function completeFlashcard() {
+    document.querySelector('.flashcard-container').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
+    document.getElementById('completionCard').classList.remove('d-none');
+}
+
+// 觸控滑動支援
+function setupTouchEvents() {
+    const flashcard = document.getElementById('flashcard');
+    
+    flashcard.addEventListener('touchstart', function(e) {
+        touchStartX = e.touches[0].clientX;
+    });
+    
+    flashcard.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].clientX;
+        handleSwipe();
+    });
+}
+
+function handleSwipe() {
+    const swipeThreshold = 50;
+    const diff = touchEndX - touchStartX;
+    
+    if (Math.abs(diff) > swipeThreshold) {
+        if (diff > 0) {
+            answerCard(true);  // 右滑 = 正確
+        } else {
+            answerCard(false); // 左滑 = 錯誤
+        }
+    }
+}
+
+// 提交答案到後端
+async function submitAnswer(questionIndex, userAnswer) {
+    try {
+        const response = await fetch(`/flashcard/${sessionId}/answer/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+            },
+            body: JSON.stringify({
+                question_index: questionIndex,
+                answer: userAnswer
+            })
+        });
+        
+        const result = await response.json();
+        console.log('答案已提交:', result);
+    } catch (error) {
+        console.error('提交答案失敗:', error);
+    }
+}
+
+// 鍵盤快捷鍵
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft') {
+        answerCard(false);
+    } else if (e.key === 'ArrowRight') {
+        answerCard(true);
+    }
+});
+</script>
+{% endblock %}

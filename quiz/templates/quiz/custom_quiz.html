@@ -1,0 +1,181 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}自定義題目設置 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-cog"></i> 自定義題目設置
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post" id="quizForm">
+                    {% csrf_token %}
+                    
+                    <!-- 知識庫選擇 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-book text-primary"></i> 選擇知識庫
+                        </label>
+                        {% if knowledge_bases %}
+                            <div class="row">
+                                {% for kb in knowledge_bases %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="knowledge_bases" value="{{ kb.id }}" 
+                                               id="kb_{{ kb.id }}">
+                                        <label class="form-check-label" for="kb_{{ kb.id }}">
+                                            <strong>{{ kb.name }}</strong><br>
+                                            <small class="text-muted">{{ kb.summary }}</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                您還沒有任何知識庫，請先 
+                                <a href="{% url 'knowledge_base_list' %}" class="alert-link">建立知識庫</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 題目類型 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-list text-success"></i> 題目類型
+                        </label>
+                        <div class="row">
+                            {% for type_value, type_name in question_types %}
+                            <div class="col-md-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="question_types" value="{{ type_value }}" 
+                                           id="type_{{ type_value }}">
+                                    <label class="form-check-label" for="type_{{ type_value }}">
+                                        {{ type_name }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- 難度選擇 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-chart-line text-warning"></i> 難度等級
+                        </label>
+                        <select name="difficulty" class="form-select" required>
+                            <option value="">請選擇難度</option>
+                            {% for diff_value, diff_name in difficulties %}
+                            <option value="{{ diff_value }}">{{ diff_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- 題目數量 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-hashtag text-info"></i> 題目數量
+                        </label>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="range" class="form-range" name="total_questions" 
+                                       min="1" max="20" value="5" id="questionRange">
+                            </div>
+                            <div class="col-md-4">
+                                <input type="number" class="form-control" id="questionNumber" 
+                                       min="1" max="20" value="5" readonly>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">
+                            建議 1-10 題以獲得最佳體驗，超過 10 題將分批生成
+                        </small>
+                    </div>
+                    
+                    <!-- 提交按鈕 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                            <i class="fas fa-play"></i> 開始答題
+                        </button>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> 返回首頁
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 說明卡片 -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-info-circle text-info"></i> 使用說明
+                </h6>
+                <ul class="list-unstyled mb-0">
+                    <li><i class="fas fa-check text-success"></i> 選擇一個或多個知識庫作為題目來源</li>
+                    <li><i class="fas fa-check text-success"></i> 選擇您想要的題目類型組合</li>
+                    <li><i class="fas fa-check text-success"></i> 系統將根據您的設定生成個性化題目</li>
+                    <li><i class="fas fa-check text-success"></i> 大於 10 題的設定將分批生成避免重複</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const questionRange = document.getElementById('questionRange');
+    const questionNumber = document.getElementById('questionNumber');
+    const form = document.getElementById('quizForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // 同步滑桿和數字輸入
+    questionRange.addEventListener('input', function() {
+        questionNumber.value = this.value;
+        updateSubmitButton();
+    });
+    
+    questionNumber.addEventListener('input', function() {
+        questionRange.value = this.value;
+        updateSubmitButton();
+    });
+    
+    // 檢查表單完整性
+    function updateSubmitButton() {
+        const knowledgeBases = document.querySelectorAll('input[name="knowledge_bases"]:checked');
+        const questionTypes = document.querySelectorAll('input[name="question_types"]:checked');
+        const difficulty = document.querySelector('select[name="difficulty"]').value;
+        
+        const isValid = knowledgeBases.length > 0 && questionTypes.length > 0 && difficulty;
+        
+        submitBtn.disabled = !isValid;
+        submitBtn.innerHTML = isValid ? 
+            '<i class="fas fa-play"></i> 開始答題' : 
+            '<i class="fas fa-exclamation-triangle"></i> 請完成所有設定';
+    }
+    
+    // 監聽所有輸入變化
+    document.querySelectorAll('input, select').forEach(input => {
+        input.addEventListener('change', updateSubmitButton);
+    });
+    
+    // 初始檢查
+    updateSubmitButton();
+    
+    // 表單提交處理
+    form.addEventListener('submit', function(e) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成題目中...';
+        submitBtn.disabled = true;
+    });
+});
+</script>
+{% endblock %}

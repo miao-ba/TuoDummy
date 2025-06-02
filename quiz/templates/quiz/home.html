@@ -1,0 +1,165 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}首頁 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4 fw-bold text-primary mb-3">
+        <i class="fas fa-brain"></i> 智能答題系統
+    </h1>
+    <p class="lead text-muted">基於 AI 的個性化學習平台</p>
+</div>
+
+<!-- 功能選項卡片 -->
+<div class="row g-4">
+    <!-- 答題功能 -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="fas fa-question-circle fa-3x text-primary"></i>
+                </div>
+                <h5 class="card-title fw-bold">開始答題</h5>
+                <p class="card-text text-muted">
+                    選擇知識庫，自定義題目類型和難度，開始你的學習之旅
+                </p>
+                
+                <!-- 子選項 -->
+                <div class="row g-2 mt-3">
+                    <div class="col-6">
+                        <a href="{% url 'custom_quiz_setup' %}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-cog"></i><br>
+                            <small>自定義題目</small>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'flashcard_setup' %}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-bolt"></i><br>
+                            <small>快速閃卡</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 知識庫管理 -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="fas fa-book fa-3x text-success"></i>
+                </div>
+                <h5 class="card-title fw-bold">知識庫管理</h5>
+                <p class="card-text text-muted">
+                    上傳學習資料，建立個人知識庫，讓 AI 為你生成專屬題目
+                </p>
+                
+                <div class="row g-2 mt-3">
+                    <div class="col-6">
+                        <a href="{% url 'knowledge_base_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-list"></i><br>
+                            <small>瀏覽</small>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'knowledge_base_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-plus"></i><br>
+                            <small>新增</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 統計資料 -->
+{% if user.is_authenticated %}
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-chart-line text-info"></i> 學習統計
+                </h5>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="h4 text-primary">{{ user_stats.completed_quizzes|default:0 }}</div>
+                        <small class="text-muted">完成答題</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="h4 text-success">{{ user_stats.knowledge_bases|default:0 }}</div>
+                        <small class="text-muted">知識庫</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="h4 text-warning">{{ user_stats.avg_score|default:0|floatformat:1 }}</div>
+                        <small class="text-muted">平均分數</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 快速新增知識庫模態框 -->
+<div class="modal fade" id="addKnowledgeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle"></i> 新增知識庫
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'knowledge_base_add' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">知識庫名稱</label>
+                        <input type="text" class="form-control" name="name" required placeholder="請輸入知識庫名稱">
+                    </div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">上傳檔案</label>
+                        <input type="file" class="form-control" name="file" accept=".txt" required>
+                        <div class="form-text">支援 .txt 格式檔案</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> 上傳建立
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .display-4 {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .card-body {
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover .card-body {
+        transform: scale(1.02);
+    }
+    
+    .btn-outline-primary:hover,
+    .btn-outline-secondary:hover,
+    .btn-outline-success:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}

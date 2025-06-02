@@ -1,0 +1,351 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}個人中心 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- 使用者資訊卡片 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-center">
+                        <div class="avatar-container mb-3">
+                            <i class="fas fa-user-circle fa-5x text-primary"></i>
+                        </div>
+                        <h5>{{ user.username }}</h5>
+                        <p class="text-muted">{{ user.email|default:"未設定信箱" }}</p>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="stat-card">
+                                    <h3 class="text-primary">{{ total_quizzes }}</h3>
+                                    <small class="text-muted">完成答題</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card">
+                                    <h3 class="text-success">{{ user.knowledgebase_set.count }}</h3>
+                                    <small class="text-muted">知識庫</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card">
+                                    <h3 class="text-warning">{{ avg_score }}</h3>
+                                    <small class="text-muted">平均分數</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card">
+                                    <h3 class="text-info">{{ user.date_joined|timesince }}</h3>
+                                    <small class="text-muted">加入時長</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 答題歷史 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history text-primary"></i> 答題歷史
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if quiz_sessions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>答題類型</th>
+                                    <th>知識庫</th>
+                                    <th>題目數量</th>
+                                    <th>分數</th>
+                                    <th>完成時間</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in quiz_sessions %}
+                                <tr>
+                                    <td>
+                                        {% if session.quiz_type == 'custom' %}
+                                            <span class="badge bg-primary">
+                                                <i class="fas fa-cog"></i> 自定義
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-bolt"></i> 閃卡
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="knowledge-bases">
+                                            {% for kb in session.knowledge_bases.all %}
+                                                <small class="badge bg-light text-dark me-1">{{ kb.name }}</small>
+                                            {% empty %}
+                                                <small class="text-muted">無</small>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">{{ session.total_questions }}</span> 題
+                                    </td>
+                                    <td>
+                                        {% if session.score >= 80 %}
+                                            <span class="badge bg-success fs-6">{{ session.score }}分</span>
+                                        {% elif session.score >= 60 %}
+                                            <span class="badge bg-warning fs-6">{{ session.score }}分</span>
+                                        {% else %}
+                                            <span class="badge bg-danger fs-6">{{ session.score }}分</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ session.completed_at|date:"m/d H:i" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'quiz_result' session.id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i> 查看
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 分頁或載入更多 -->
+                    {% if quiz_sessions.count >= 20 %}
+                    <div class="text-center mt-3">
+                        <button class="btn btn-outline-secondary" onclick="loadMoreHistory()">
+                            <i class="fas fa-arrow-down"></i> 載入更多
+                        </button>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <!-- 空狀態 -->
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">還沒有答題記錄</h5>
+                        <p class="text-muted">開始您的第一次答題吧！</p>
+                        <a href="{% url 'custom_quiz_setup' %}" class="btn btn-primary">
+                            <i class="fas fa-play"></i> 開始答題
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 學習成就 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-trophy text-warning"></i> 學習成就
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- 答題次數成就 -->
+                    <div class="col-md-6 mb-3">
+                        <div class="achievement-card">
+                            <div class="d-flex align-items-center">
+                                {% if total_quizzes >= 10 %}
+                                    <i class="fas fa-medal fa-2x text-warning me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">答題達人</h6>
+                                        <small class="text-muted">完成 10 次以上答題</small>
+                                    </div>
+                                {% elif total_quizzes >= 5 %}
+                                    <i class="fas fa-star fa-2x text-info me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">學習之星</h6>
+                                        <small class="text-muted">完成 5 次以上答題</small>
+                                    </div>
+                                {% elif total_quizzes >= 1 %}
+                                    <i class="fas fa-check-circle fa-2x text-success me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">初學者</h6>
+                                        <small class="text-muted">完成第一次答題</small>
+                                    </div>
+                                {% else %}
+                                    <i class="fas fa-circle fa-2x text-muted me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0 text-muted">尚未開始</h6>
+                                        <small class="text-muted">完成第一次答題解鎖</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 分數成就 -->
+                    <div class="col-md-6 mb-3">
+                        <div class="achievement-card">
+                            <div class="d-flex align-items-center">
+                                {% if avg_score >= 90 %}
+                                    <i class="fas fa-crown fa-2x text-warning me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">完美主義者</h6>
+                                        <small class="text-muted">平均分數 90 分以上</small>
+                                    </div>
+                                {% elif avg_score >= 80 %}
+                                    <i class="fas fa-gem fa-2x text-primary me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">優秀學習者</h6>
+                                        <small class="text-muted">平均分數 80 分以上</small>
+                                    </div>
+                                {% elif avg_score >= 70 %}
+                                    <i class="fas fa-thumbs-up fa-2x text-success me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">穩定進步</h6>
+                                        <small class="text-muted">平均分數 70 分以上</small>
+                                    </div>
+                                {% else %}
+                                    <i class="fas fa-circle fa-2x text-muted me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0 text-muted">繼續努力</h6>
+                                        <small class="text-muted">提升平均分數解鎖成就</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 快速操作 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-rocket text-info"></i> 快速操作
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <a href="{% url 'custom_quiz_setup' %}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-cog"></i> 自定義答題
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <a href="{% url 'flashcard_setup' %}" class="btn btn-outline-info w-100">
+                            <i class="fas fa-bolt"></i> 快速閃卡
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <a href="{% url 'knowledge_base_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-book"></i> 管理知識庫
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        padding: 15px;
+        border-radius: 10px;
+        background: rgba(102, 126, 234, 0.05);
+        margin-bottom: 10px;
+    }
+    
+    .stat-card h3 {
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    
+    .achievement-card {
+        padding: 15px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    .knowledge-bases {
+        max-width: 200px;
+    }
+    
+    .knowledge-bases .badge {
+        font-size: 0.7rem;
+    }
+    
+    .table th {
+        font-weight: 600;
+        color: #495057;
+        border-top: none;
+    }
+    
+    .table td {
+        vertical-align: middle;
+    }
+    
+    .avatar-container {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .avatar-container::after {
+        content: '';
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        width: 20px;
+        height: 20px;
+        background: #28a745;
+        border: 3px solid white;
+        border-radius: 50%;
+    }
+    
+    @media (max-width: 768px) {
+        .stat-card {
+            margin-bottom: 15px;
+        }
+        
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadMoreHistory() {
+    // 這裡可以實作 AJAX 載入更多歷史記錄的功能
+    alert('載入更多功能需要額外實作分頁邏輯');
+}
+
+// 統計數據動畫
+document.addEventListener('DOMContentLoaded', function() {
+    const statNumbers = document.querySelectorAll('.stat-card h3');
+    
+    statNumbers.forEach(number => {
+        const finalValue = parseInt(number.textContent);
+        let currentValue = 0;
+        const increment = finalValue / 30; // 30 幀動畫
+        
+        const timer = setInterval(() => {
+            currentValue += increment;
+            if (currentValue >= finalValue) {
+                number.textContent = finalValue;
+                clearInterval(timer);
+            } else {
+                number.textContent = Math.floor(currentValue);
+            }
+        }, 50);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,410 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}閃卡設置 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-bolt"></i> 快速閃卡設置
+                </h4>
+            </div>
+            <div class="card-body">
+                <!-- 閃卡介紹 -->
+                <div class="alert alert-info mb-4">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle"></i> 什麼是閃卡？
+                    </h6>
+                    <p class="mb-0">
+                        閃卡是一種快速學習工具，類似 Tinder 滑卡操作。系統會生成是非題，
+                        您可以左右滑動或點擊按鈕來快速答題，適合碎片化時間學習。
+                    </p>
+                </div>
+                
+                <form method="post" id="flashcardForm">
+                    {% csrf_token %}
+                    
+                    <!-- 知識庫選擇 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-book text-primary"></i> 選擇知識庫
+                        </label>
+                        {% if knowledge_bases %}
+                            <div class="knowledge-selection">
+                                {% for kb in knowledge_bases %}
+                                <div class="knowledge-item mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="knowledge_bases" value="{{ kb.id }}" 
+                                               id="kb_{{ kb.id }}">
+                                        <label class="form-check-label w-100" for="kb_{{ kb.id }}">
+                                            <div class="knowledge-card">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-1">{{ kb.name }}</h6>
+                                                        <small class="text-muted">{{ kb.summary }}</small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <small class="text-muted">{{ kb.content|length }} 字</small><br>
+                                                        <small class="text-muted">{{ kb.created_at|timesince }}前</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                您還沒有任何知識庫，請先 
+                                <a href="{% url 'knowledge_base_list' %}" class="alert-link">建立知識庫</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- 難度選擇 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-chart-line text-warning"></i> 難度等級
+                        </label>
+                        <div class="row">
+                            {% for diff_value, diff_name in difficulties %}
+                            <div class="col-md-4 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" 
+                                           name="difficulty" value="{{ diff_value }}" 
+                                           id="diff_{{ diff_value }}" required>
+                                    <label class="form-check-label w-100" for="diff_{{ diff_value }}">
+                                        <div class="difficulty-card text-center p-3">
+                                            {% if diff_value == 'easy' %}
+                                                <i class="fas fa-leaf fa-2x text-success mb-2"></i>
+                                            {% elif diff_value == 'medium' %}
+                                                <i class="fas fa-mountain fa-2x text-warning mb-2"></i>
+                                            {% else %}
+                                                <i class="fas fa-fire fa-2x text-danger mb-2"></i>
+                                            {% endif %}
+                                            <div class="fw-bold">{{ diff_name }}</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- 題目數量 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-hashtag text-info"></i> 閃卡數量
+                        </label>
+                        <div class="quantity-selector">
+                            {% for count in "5,10,15,20"|make_list %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" 
+                                       name="total_questions" value="{{ count }}" 
+                                       id="count_{{ count }}" {% if count == "10" %}checked{% endif %}>
+                                <label class="form-check-label" for="count_{{ count }}">
+                                    <div class="quantity-card">
+                                        <div class="quantity-number">{{ count }}</div>
+                                        <small class="text-muted">張</small>
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-clock"></i> 
+                            預估時間：5張約1分鐘，10張約2分鐘，20張約4分鐘
+                        </small>
+                    </div>
+                    
+                    <!-- 提交按鈕 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-info btn-lg" id="submitBtn">
+                            <i class="fas fa-bolt"></i> 開始閃卡答題
+                        </button>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> 返回首頁
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 使用說明 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-question-circle text-info"></i> 閃卡操作說明
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-mobile-alt text-primary"></i> 手機操作</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-arrow-left text-danger me-2"></i>左滑 = 錯誤</li>
+                            <li><i class="fas fa-arrow-right text-success me-2"></i>右滑 = 正確</li>
+                            <li><i class="fas fa-touch text-info me-2"></i>點擊按鈕</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-keyboard text-primary"></i> 鍵盤操作</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-arrow-left text-danger me-2"></i>左箭頭 = 錯誤</li>
+                            <li><i class="fas fa-arrow-right text-success me-2"></i>右箭頭 = 正確</li>
+                            <li><i class="fas fa-space text-info me-2"></i>空格鍵 = 翻卡</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="alert alert-light mt-3">
+                    <i class="fas fa-lightbulb text-warning"></i>
+                    <strong>小貼士：</strong>
+                    閃卡會即時顯示正確答案和解釋，幫助您快速學習和記憶。
+                    答題結束後可以查看詳細的答題統計。
+                </div>
+            </div>
+        </div>
+        
+        <!-- 學習統計預覽 -->
+        {% if user.is_authenticated %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-chart-bar text-success"></i> 您的閃卡記錄
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="stat-item">
+                            <h5 class="text-primary">{{ flashcard_stats.completed_count|default:0 }}</h5>
+                            <small class="text-muted">完成次數</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stat-item">
+                            <h5 class="text-success">{{ flashcard_stats.avg_score|default:0|floatformat:1 }}</h5>
+                            <small class="text-muted">平均分數</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="stat-item">
+                            <h5 class="text-info">{{ flashcard_stats.knowledge_bases|default:0 }}</h5>
+                            <small class="text-muted">可用知識庫</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .knowledge-card {
+        padding: 15px;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.02);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .form-check-input:checked + .form-check-label .knowledge-card {
+        border-color: #0dcaf0;
+        background: rgba(13, 202, 240, 0.1);
+    }
+    
+    .knowledge-card:hover {
+        background: rgba(13, 202, 240, 0.05);
+        transform: translateY(-2px);
+    }
+    
+    .difficulty-card {
+        border: 2px solid transparent;
+        border-radius: 15px;
+        background: rgba(0, 0, 0, 0.02);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .form-check-input:checked + .form-check-label .difficulty-card {
+        border-color: #ffc107;
+        background: rgba(255, 193, 7, 0.1);
+        transform: scale(1.05);
+    }
+    
+    .difficulty-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .quantity-card {
+        display: inline-block;
+        padding: 15px 20px;
+        border: 2px solid transparent;
+        border-radius: 50px;
+        background: rgba(0, 0, 0, 0.02);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-width: 80px;
+    }
+    
+    .quantity-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #0dcaf0;
+    }
+    
+    .form-check-input:checked + .form-check-label .quantity-card {
+        border-color: #0dcaf0;
+        background: rgba(13, 202, 240, 0.1);
+        transform: scale(1.1);
+    }
+    
+    .quantity-card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 10px rgba(13, 202, 240, 0.3);
+    }
+    
+    .quantity-selector {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .stat-item {
+        padding: 10px;
+    }
+    
+    .stat-item h5 {
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    
+    .btn-info {
+        background: linear-gradient(135deg, #0dcaf0 0%, #0077be 100%);
+        border: none;
+        box-shadow: 0 4px 15px rgba(13, 202, 240, 0.3);
+    }
+    
+    .btn-info:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(13, 202, 240, 0.4);
+    }
+    
+    @media (max-width: 768px) {
+        .quantity-selector {
+            justify-content: center;
+        }
+        
+        .knowledge-card {
+            margin-bottom: 10px;
+        }
+        
+        .quantity-card {
+            min-width: 60px;
+            padding: 10px 15px;
+        }
+        
+        .quantity-number {
+            font-size: 1.2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('flashcardForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // 檢查表單完整性
+    function updateSubmitButton() {
+        const knowledgeBases = document.querySelectorAll('input[name="knowledge_bases"]:checked');
+        const difficulty = document.querySelector('input[name="difficulty"]:checked');
+        const totalQuestions = document.querySelector('input[name="total_questions"]:checked');
+        
+        const isValid = knowledgeBases.length > 0 && difficulty && totalQuestions;
+        
+        submitBtn.disabled = !isValid;
+        
+        if (isValid) {
+            submitBtn.innerHTML = '<i class="fas fa-bolt"></i> 開始閃卡答題';
+            submitBtn.classList.remove('btn-secondary');
+            submitBtn.classList.add('btn-info');
+        } else {
+            submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 請完成所有設定';
+            submitBtn.classList.remove('btn-info');
+            submitBtn.classList.add('btn-secondary');
+        }
+    }
+    
+    // 監聽所有輸入變化
+    document.querySelectorAll('input').forEach(input => {
+        input.addEventListener('change', updateSubmitButton);
+    });
+    
+    // 初始檢查
+    updateSubmitButton();
+    
+    // 表單提交處理
+    form.addEventListener('submit', function(e) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成閃卡中...';
+        submitBtn.disabled = true;
+    });
+    
+    // 知識庫卡片點擊效果
+    document.querySelectorAll('.knowledge-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const checkbox = this.parentElement.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            updateSubmitButton();
+        });
+    });
+    
+    // 難度卡片點擊效果
+    document.querySelectorAll('.difficulty-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const radio = this.parentElement.querySelector('input[type="radio"]');
+            radio.checked = true;
+            updateSubmitButton();
+        });
+    });
+    
+    // 數量卡片點擊效果
+    document.querySelectorAll('.quantity-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const radio = this.parentElement.querySelector('input[type="radio"]');
+            radio.checked = true;
+            updateSubmitButton();
+        });
+    });
+    
+    // 預估時間更新
+    document.querySelectorAll('input[name="total_questions"]').forEach(input => {
+        input.addEventListener('change', function() {
+            const count = parseInt(this.value);
+            const timeEstimate = Math.ceil(count / 5); // 每5題約1分鐘
+            
+            const timeText = document.querySelector('.form-text');
+            timeText.innerHTML = `
+                <i class="fas fa-clock"></i> 
+                預估時間：${count}張約${timeEstimate}分鐘 | 建議在休息時間進行
+            `;
+        });
+    });
+});
+</script>
+{% endblock %}

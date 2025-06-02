@@ -1,0 +1,531 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}知識庫管理 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 頁面標題和操作列 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold">
+            <i class="fas fa-database text-primary"></i> 知識庫管理
+        </h4>
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="toggleAddForm()" id="addToggleBtn">
+                <i class="fas fa-plus"></i> 新增
+            </button>
+            <button class="btn btn-outline-secondary" onclick="refreshList()">
+                <i class="fas fa-sync"></i> 重新整理
+            </button>
+        </div>
+    </div>
+    
+    <!-- 新增表單區域（預設隱藏） -->
+    <div class="card mb-3" id="addFormSection" style="display: none;">
+        <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-plus-circle"></i> 新增知識庫
+                </h6>
+                <button type="button" class="btn btn-outline-light btn-sm" onclick="hideAddForm()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'knowledge_base_add' %}" enctype="multipart/form-data" id="quickAddForm">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="kb_name" class="form-label">知識庫名稱</label>
+                        <input type="text" class="form-control" name="name" id="kb_name" required 
+                               placeholder="例如：古詩詞大全">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="kb_file" class="form-label">檔案上傳</label>
+                        <input type="file" class="form-control" name="file" id="kb_file" accept=".txt" required>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success me-2" id="quickSubmitBtn">
+                            <i class="fas fa-upload"></i> 上傳
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="hideAddForm()">
+                            取消
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            支援 .txt 格式，檔案大小限制 10MB，系統會自動生成摘要和向量索引
+                        </small>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 知識庫統計資訊 -->
+    {% if knowledge_bases %}
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center py-2">
+                    <h5 class="text-primary mb-0">{{ knowledge_bases.count }}</h5>
+                    <small class="text-muted">總知識庫</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center py-2">
+                    <h5 class="text-success mb-0">{{ knowledge_bases|length }}</h5>
+                    <small class="text-muted">可用庫</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">最近更新</small>
+                        <small class="fw-bold">{{ knowledge_bases.first.created_at|timesince }}前</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- 知識庫列表 -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">知識庫列表</h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" onclick="setViewMode('list')">
+                        <i class="fas fa-list"></i> 列表
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="setViewMode('grid')">
+                        <i class="fas fa-th"></i> 網格
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if knowledge_bases %}
+                <!-- 列表模式 -->
+                <div id="listView">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th>名稱</th>
+                                    <th>摘要</th>
+                                    <th style="width: 100px;">大小</th>
+                                    <th style="width: 120px;">建立時間</th>
+                                    <th style="width: 100px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for kb in knowledge_bases %}
+                                <tr>
+                                    <td class="text-muted">{{ forloop.counter }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-file-text text-primary me-2"></i>
+                                            <div>
+                                                <strong>{{ kb.name }}</strong>
+                                                <br><small class="text-success">
+                                                    <i class="fas fa-check-circle"></i> 已索引
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted">{{ kb.summary|truncatechars:60 }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ kb.content|length|filesizeformat }}
+                                        </span>
+                                    </td>
+                                    <td class="text-muted">
+                                        {{ kb.created_at|date:"m/d H:i" }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="toggleDetails({{ forloop.counter0 }})"
+                                                    title="查看詳情">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-primary"
+                                                    onclick="editKnowledge({{ kb.id }})"
+                                                    title="編輯">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger"
+                                                    onclick="deleteKnowledge({{ kb.id }}, '{{ kb.name }}')"
+                                                    title="刪除">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <!-- 詳情展開行 -->
+                                <tr id="details_{{ forloop.counter0 }}" class="detail-row" style="display: none;">
+                                    <td colspan="6" class="bg-light">
+                                        <div class="p-3">
+                                            <div class="row">
+                                                <div class="col-md-8">
+                                                    <h6>完整摘要</h6>
+                                                    <p class="text-muted">{{ kb.summary }}</p>
+                                                    
+                                                    <h6>內容預覽</h6>
+                                                    <div class="bg-white p-2 border rounded" style="max-height: 150px; overflow-y: auto;">
+                                                        <small class="font-monospace">{{ kb.content|truncatechars:300 }}</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <h6>詳細資訊</h6>
+                                                    <ul class="list-unstyled">
+                                                        <li><strong>ID:</strong> {{ kb.id }}</li>
+                                                        <li><strong>建立者:</strong> {{ kb.user.username }}</li>
+                                                        <li><strong>字數:</strong> {{ kb.content|length|floatformat:0 }}</li>
+                                                        <li><strong>建立時間:</strong> {{ kb.created_at|date:"Y-m-d H:i:s" }}</li>
+                                                    </ul>
+                                                    
+                                                    <div class="d-grid gap-1">
+                                                        <button class="btn btn-sm btn-outline-primary">
+                                                            <i class="fas fa-download"></i> 匯出
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-info">
+                                                            <i class="fas fa-chart-bar"></i> 統計
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 網格模式（隱藏） -->
+                <div id="gridView" style="display: none;">
+                    <div class="row p-3">
+                        {% for kb in knowledge_bases %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="card-title mb-0">{{ kb.name }}</h6>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-eye"></i> 查看</a></li>
+                                                <li><a class="dropdown-item" href="#"><i class="fas fa-edit"></i> 編輯</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" href="{% url 'knowledge_base_delete' kb.id %}"><i class="fas fa-trash"></i> 刪除</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <p class="card-text text-muted small">{{ kb.summary|truncatechars:80 }}</p>
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>{{ kb.content|length }} 字</span>
+                                        <span>{{ kb.created_at|timesince }}前</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- 空狀態 -->
+                <div class="text-center py-5">
+                    <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">尚無知識庫</h5>
+                    <p class="text-muted">點擊上方「新增」按鈕建立您的第一個知識庫</p>
+                    <button class="btn btn-success" onclick="showAddForm()">
+                        <i class="fas fa-plus"></i> 立即新增
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 成功訊息區域 -->
+<div id="messageArea" class="position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-row {
+        transition: all 0.3s ease;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .card-header {
+        background-color: rgba(0, 123, 255, 0.05);
+        border-bottom: 1px solid rgba(0, 123, 255, 0.1);
+    }
+    
+    .font-monospace {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+    
+    .table th {
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+    }
+    
+    #addFormSection {
+        border-left: 4px solid #28a745;
+        animation: slideDown 0.3s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .message-alert {
+        animation: slideInRight 0.3s ease-out;
+        min-width: 300px;
+    }
+    
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全域變數
+let currentViewMode = 'list';
+
+// 顯示/隱藏新增表單
+function toggleAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    if (formSection.style.display === 'none') {
+        showAddForm();
+    } else {
+        hideAddForm();
+    }
+}
+
+function showAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    formSection.style.display = 'block';
+    toggleBtn.innerHTML = '<i class="fas fa-minus"></i> 收起';
+    toggleBtn.classList.remove('btn-success');
+    toggleBtn.classList.add('btn-warning');
+    
+    // 聚焦到名稱輸入框
+    setTimeout(() => {
+        document.getElementById('kb_name').focus();
+    }, 300);
+    
+    // 滾動到表單
+    formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    formSection.style.display = 'none';
+    toggleBtn.innerHTML = '<i class="fas fa-plus"></i> 新增';
+    toggleBtn.classList.remove('btn-warning');
+    toggleBtn.classList.add('btn-success');
+    
+    // 重置表單
+    document.getElementById('quickAddForm').reset();
+}
+
+// 切換檢視模式
+function setViewMode(mode) {
+    const listView = document.getElementById('listView');
+    const gridView = document.getElementById('gridView');
+    const buttons = document.querySelectorAll('[onclick^="setViewMode"]');
+    
+    // 更新按鈕狀態
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    if (mode === 'list') {
+        listView.style.display = 'block';
+        gridView.style.display = 'none';
+    } else {
+        listView.style.display = 'none';
+        gridView.style.display = 'block';
+    }
+    
+    currentViewMode = mode;
+}
+
+// 切換詳情顯示
+function toggleDetails(index) {
+    const detailRow = document.getElementById('details_' + index);
+    const isVisible = detailRow.style.display !== 'none';
+    
+    if (isVisible) {
+        detailRow.style.display = 'none';
+    } else {
+        // 隱藏其他詳情
+        document.querySelectorAll('.detail-row').forEach(row => {
+            row.style.display = 'none';
+        });
+        
+        detailRow.style.display = 'table-row';
+    }
+}
+
+// 編輯知識庫
+function editKnowledge(id) {
+    showMessage('編輯功能開發中', 'info');
+}
+
+// 刪除知識庫
+function deleteKnowledge(id, name) {
+    if (confirm(`確定要刪除知識庫「${name}」嗎？\n\n此操作無法復原。`)) {
+        // 這裡應該發送刪除請求
+        window.location.href = `/knowledge/${id}/delete/`;
+    }
+}
+
+// 重新整理列表
+function refreshList() {
+    window.location.reload();
+}
+
+// 顯示訊息
+function showMessage(text, type = 'success') {
+    const messageArea = document.getElementById('messageArea');
+    const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'info': 'alert-info',
+        'warning': 'alert-warning'
+    };
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass[type]} alert-dismissible fade show message-alert`;
+    alert.innerHTML = `
+        ${text}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    
+    messageArea.appendChild(alert);
+    
+    // 5秒後自動移除
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+// 表單提交處理
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('quickAddForm');
+    const submitBtn = document.getElementById('quickSubmitBtn');
+    
+    form.addEventListener('submit', function(e) {
+        const nameInput = document.getElementById('kb_name');
+        const fileInput = document.getElementById('kb_file');
+        
+        // 基本驗證
+        if (!nameInput.value.trim()) {
+            e.preventDefault();
+            showMessage('請輸入知識庫名稱', 'error');
+            nameInput.focus();
+            return;
+        }
+        
+        if (!fileInput.files[0]) {
+            e.preventDefault();
+            showMessage('請選擇要上傳的檔案', 'error');
+            fileInput.focus();
+            return;
+        }
+        
+        // 檔案驗證
+        const file = fileInput.files[0];
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        
+        if (file.size > maxSize) {
+            e.preventDefault();
+            showMessage('檔案大小不能超過 10MB', 'error');
+            return;
+        }
+        
+        if (!file.name.toLowerCase().endsWith('.txt')) {
+            e.preventDefault();
+            showMessage('請選擇 .txt 格式的檔案', 'error');
+            return;
+        }
+        
+        // 顯示上傳狀態
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上傳中...';
+        submitBtn.disabled = true;
+        
+        showMessage('正在上傳檔案，請稍候...', 'info');
+    });
+    
+    // 檔案選擇監聽
+    document.getElementById('kb_file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const fileSize = (file.size / 1024).toFixed(1);
+            showMessage(`檔案選擇成功: ${file.name} (${fileSize} KB)`, 'success');
+        }
+    });
+});
+
+console.log('知識庫管理頁面已載入 - 條列式版本');
+</script>
+{% endblock %}

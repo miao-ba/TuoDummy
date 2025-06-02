@@ -1,0 +1,213 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}答題中 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- 進度顯示 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">答題進度</span>
+                    <span class="text-muted">{{ question_number }} / {{ total_questions }}</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" style="width: {{ progress }}%"></div>
+                </div>
+            </div>
+        </div>
+        
+        {% if current_question %}
+        <!-- 題目卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        {% if current_question.question_type == 'multiple_choice' %}
+                            <i class="fas fa-list text-primary"></i> 選擇題
+                        {% elif current_question.question_type == 'true_false' %}
+                            <i class="fas fa-check-circle text-success"></i> 是非題
+                        {% elif current_question.question_type == 'short_answer' %}
+                            <i class="fas fa-edit text-warning"></i> 簡答題
+                        {% elif current_question.question_type == 'essay' %}
+                            <i class="fas fa-align-left text-info"></i> 論述題
+                        {% endif %}
+                    </h5>
+                    <span class="badge bg-secondary">題目 {{ question_number }}</span>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <form method="post" id="answerForm">
+                    {% csrf_token %}
+                    
+                    <!-- 題目內容 -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">{{ current_question.question_text }}</h6>
+                    </div>
+                    
+                    <!-- 答案選項 -->
+                    {% if current_question.question_type == 'multiple_choice' or current_question.question_type == 'true_false' %}
+                        <div class="mb-4">
+                            {% for option in current_question.options %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="answer" 
+                                       value="{{ option.text }}" id="option_{{ forloop.counter }}" required>
+                                <label class="form-check-label" for="option_{{ forloop.counter }}">
+                                    {{ option.text }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <!-- 文字輸入 -->
+                        <div class="mb-4">
+                            <textarea name="answer" class="form-control" rows="5" 
+                                    placeholder="請輸入您的答案..." required></textarea>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- 提交按鈕 -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                            {% if question_number == total_questions %}
+                                <i class="fas fa-flag-checkered"></i> 完成答題
+                            {% else %}
+                                <i class="fas fa-arrow-right"></i> 下一題
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 答題提示 -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-lightbulb text-warning"></i> 答題提示
+                </h6>
+                <ul class="list-unstyled mb-0">
+                    {% if current_question.question_type == 'multiple_choice' %}
+                        <li><i class="fas fa-check text-success"></i> 請從選項中選擇最正確的答案</li>
+                    {% elif current_question.question_type == 'true_false' %}
+                        <li><i class="fas fa-check text-success"></i> 請判斷題目敘述的正確性</li>
+                    {% elif current_question.question_type == 'short_answer' %}
+                        <li><i class="fas fa-check text-success"></i> 請簡潔明確地回答問題</li>
+                    {% elif current_question.question_type == 'essay' %}
+                        <li><i class="fas fa-check text-success"></i> 請詳細論述您的觀點和理由</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        
+        {% else %}
+        <!-- 無題目狀態 -->
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                <h5>沒有可用的題目</h5>
+                <p class="text-muted">請返回重新設定答題參數</p>
+                <a href="{% url 'custom_quiz_setup' %}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> 重新設定
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-check-input:checked {
+        background-color: #667eea;
+        border-color: #667eea;
+    }
+    
+    .form-check-label {
+        cursor: pointer;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        width: 100%;
+        margin-left: -32px;
+        padding-left: 44px;
+    }
+    
+    .form-check-label:hover {
+        background-color: rgba(102, 126, 234, 0.1);
+    }
+    
+    .form-check:has(input:checked) .form-check-label {
+        background-color: rgba(102, 126, 234, 0.2);
+        color: #667eea;
+        font-weight: 500;
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+    }
+    
+    textarea.form-control {
+        resize: vertical;
+        min-height: 120px;
+    }
+    
+    .progress {
+        height: 12px;
+        background-color: rgba(102, 126, 234, 0.1);
+    }
+    
+    .progress-bar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: width 0.6s ease;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('answerForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // 表單提交處理
+    form.addEventListener('submit', function(e) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 處理中...';
+        submitBtn.disabled = true;
+    });
+    
+    // 鍵盤快捷鍵（數字鍵選擇選項）
+    document.addEventListener('keydown', function(e) {
+        if (e.key >= '1' && e.key <= '4') {
+            const options = document.querySelectorAll('input[name="answer"]');
+            const index = parseInt(e.key) - 1;
+            if (options[index]) {
+                options[index].checked = true;
+            }
+        }
+        
+        // Enter 鍵提交（僅限選擇題和是非題）
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            const selectedOption = document.querySelector('input[name="answer"]:checked');
+            if (selectedOption) {
+                form.submit();
+            }
+        }
+    });
+    
+    // 選項點擊動畫
+    document.querySelectorAll('.form-check-label').forEach(label => {
+        label.addEventListener('click', function() {
+            this.style.transform = 'scale(0.98)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1)';
+            }, 100);
+        });
+    });
+});
+</script>
+{% endblock %}

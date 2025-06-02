@@ -1,0 +1,333 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}答題結果 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- 結果總覽卡片 -->
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <div class="mb-4">
+                    {% if session.score >= 80 %}
+                        <i class="fas fa-trophy fa-4x text-warning mb-3"></i>
+                        <h3 class="text-warning">優秀！</h3>
+                    {% elif session.score >= 60 %}
+                        <i class="fas fa-thumbs-up fa-4x text-success mb-3"></i>
+                        <h3 class="text-success">不錯！</h3>
+                    {% else %}
+                        <i class="fas fa-heart fa-4x text-danger mb-3"></i>
+                        <h3 class="text-danger">繼續努力！</h3>
+                    {% endif %}
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="result-stat">
+                            <h2 class="text-primary">{{ session.score|floatformat:1 }}</h2>
+                            <small class="text-muted">總分</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="result-stat">
+                            <h2 class="text-success">{{ correct_count }}</h2>
+                            <small class="text-muted">正確題數</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="result-stat">
+                            <h2 class="text-info">{{ total_count }}</h2>
+                            <small class="text-muted">總題數</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="result-stat">
+                            <h2 class="text-warning">{{ accuracy_rate }}%</h2>
+                            <small class="text-muted">正確率</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 進度條 -->
+                <div class="mt-4">
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" 
+                             style="width: {{ accuracy_rate }}%">
+                            {{ correct_count }} / {{ total_count }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 答題詳情 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list-alt text-primary"></i> 答題詳情
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for detail in answer_details %}
+                <div class="answer-item mb-4">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="fw-bold mb-0">
+                            題目 {{ forloop.counter }}
+                            {% if detail.answer.question_type == 'multiple_choice' %}
+                                <span class="badge bg-primary ms-2">選擇題</span>
+                            {% elif detail.answer.question_type == 'true_false' %}
+                                <span class="badge bg-success ms-2">是非題</span>
+                            {% elif detail.answer.question_type == 'short_answer' %}
+                                <span class="badge bg-warning ms-2">簡答題</span>
+                            {% elif detail.answer.question_type == 'essay' %}
+                                <span class="badge bg-info ms-2">論述題</span>
+                            {% endif %}
+                        </h6>
+                        <span class="badge {% if detail.answer.score == 100 %}bg-success{% elif detail.answer.score >= 60 %}bg-warning{% else %}bg-danger{% endif %} fs-6">
+                            {{ detail.answer.score }} 分
+                        </span>
+                    </div>
+                    
+                    <div class="question-content mb-3">
+                        <strong>題目：</strong>{{ detail.answer.question_text }}
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="answer-box user-answer">
+                                <strong>您的答案：</strong>
+                                <div class="mt-1 p-2 bg-light rounded">
+                                    {{ detail.answer.user_answer|default:"未作答" }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="answer-box correct-answer">
+                                <strong>正確答案：</strong>
+                                <div class="mt-1 p-2 bg-success bg-opacity-10 border border-success border-opacity-25 rounded">
+                                    {{ detail.answer.correct_answer }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if detail.answer.score != 100 %}
+                    <div class="explanation mt-3">
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>解析：</strong>
+                            {{ detail.explanation }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if not forloop.last %}
+                    <hr class="my-4">
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- 操作按鈕 -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        {% if session.quiz_type == 'custom' %}
+                        <a href="{% url 'custom_quiz_setup' %}" class="btn btn-primary w-100">
+                            <i class="fas fa-redo"></i> 重新答題
+                        </a>
+                        {% else %}
+                        <a href="{% url 'flashcard_setup' %}" class="btn btn-primary w-100">
+                            <i class="fas fa-redo"></i> 重新答題
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <a href="{% url 'user_profile' %}" class="btn btn-outline-info w-100">
+                            <i class="fas fa-user"></i> 查看歷史
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-home"></i> 返回首頁
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 學習建議 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb text-warning"></i> 學習建議
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if session.score >= 90 %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-star"></i>
+                        <strong>恭喜！</strong> 您的表現非常優秀，繼續保持這種學習狀態。可以嘗試更高難度的題目挑戰自己。
+                    </div>
+                {% elif session.score >= 70 %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-thumbs-up"></i>
+                        <strong>不錯！</strong> 您已經掌握了大部分知識點，建議重點複習錯題，加強薄弱環節。
+                    </div>
+                {% elif session.score >= 50 %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>需要加強！</strong> 建議重新學習相關知識點，多做練習題來鞏固基礎。
+                    </div>
+                {% else %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-heart"></i>
+                        <strong>別灰心！</strong> 學習是一個過程，建議從基礎開始，逐步提升。可以降低難度重新練習。
+                    </div>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <h6>錯題統計：</h6>
+                    <ul class="list-unstyled">
+                        {% for detail in answer_details %}
+                            {% if detail.answer.score != 100 %}
+                            <li class="mb-1">
+                                <span class="badge bg-light text-dark me-2">{{ detail.answer.question_type|title }}</span>
+                                題目 {{ forloop.counter }} - {{ detail.answer.score }} 分
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if correct_count == total_count %}
+                            <li class="text-success">
+                                <i class="fas fa-check"></i> 沒有錯題，表現完美！
+                            </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .result-stat {
+        padding: 20px 10px;
+    }
+    
+    .result-stat h2 {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .answer-item {
+        border-left: 4px solid #e9ecef;
+        padding-left: 15px;
+    }
+    
+    .answer-item:has(.badge.bg-success) {
+        border-left-color: #28a745;
+    }
+    
+    .answer-item:has(.badge.bg-danger) {
+        border-left-color: #dc3545;
+    }
+    
+    .answer-item:has(.badge.bg-warning) {
+        border-left-color: #ffc107;
+    }
+    
+    .answer-box {
+        margin-bottom: 15px;
+    }
+    
+    .question-content {
+        background: rgba(102, 126, 234, 0.05);
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+    
+    .progress {
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.1);
+    }
+    
+    .progress-bar {
+        border-radius: 10px;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        font-weight: bold;
+        line-height: 20px;
+    }
+    
+    .explanation {
+        margin-left: -15px;
+        margin-right: -15px;
+        padding: 0 15px;
+    }
+    
+    .badge.fs-6 {
+        font-size: 1rem !important;
+        padding: 8px 12px;
+    }
+    
+    @media (max-width: 768px) {
+        .result-stat h2 {
+            font-size: 2rem;
+        }
+        
+        .col-md-6 {
+            margin-bottom: 15px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 分數動畫效果
+    const scoreElement = document.querySelector('.result-stat h2');
+    if (scoreElement) {
+        const finalScore = parseFloat(scoreElement.textContent);
+        let currentScore = 0;
+        const increment = finalScore / 50;
+        
+        const timer = setInterval(() => {
+            currentScore += increment;
+            if (currentScore >= finalScore) {
+                scoreElement.textContent = finalScore.toFixed(1);
+                clearInterval(timer);
+            } else {
+                scoreElement.textContent = currentScore.toFixed(1);
+            }
+        }, 20);
+    }
+    
+    // 題目展開/收合功能
+    document.querySelectorAll('.answer-item').forEach(item => {
+        const explanation = item.querySelector('.explanation');
+        if (explanation) {
+            const questionContent = item.querySelector('.question-content');
+            questionContent.style.cursor = 'pointer';
+            questionContent.title = '點擊查看解析';
+            
+            questionContent.addEventListener('click', () => {
+                explanation.style.display = explanation.style.display === 'none' ? 'block' : 'none';
+            });
+            
+            // 預設隱藏解析（錯題才顯示）
+            const score = item.querySelector('.badge').textContent;
+            if (score.includes('100')) {
+                explanation.style.display = 'none';
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
