@@ -1,0 +1,846 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}AI模型管理 - 智能答題系統{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 頁面標題和操作列 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold">
+            <i class="fas fa-robot text-primary"></i> AI 模型管理
+        </h4>
+        <div class="btn-group">
+            <button class="btn btn-success" onclick="toggleAddForm()" id="addToggleBtn">
+                <i class="fas fa-plus"></i> 新增模型
+            </button>
+            <button class="btn btn-outline-secondary" onclick="refreshModels()">
+                <i class="fas fa-sync"></i> 重新整理
+            </button>
+        </div>
+    </div>
+    
+    <!-- 新增模型表單區域（預設隱藏） -->
+    <div class="card mb-3" id="addFormSection" style="display: none;">
+        <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-plus-circle"></i> 新增 AI 模型
+                </h6>
+                <button type="button" class="btn btn-outline-light btn-sm" onclick="hideAddForm()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'add_model' %}" id="addModelForm">
+                {% csrf_token %}
+                
+                <!-- 模型類型選擇 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-layer-group"></i> 模型類型
+                        </label>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="model_type" 
+                                           value="ollama" id="type_ollama" checked>
+                                    <label class="form-check-label w-100" for="type_ollama">
+                                        <div class="model-type-card-small">
+                                            <i class="fas fa-server text-info me-1"></i>
+                                            <small><strong>Ollama</strong><br>本地模型</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="model_type" 
+                                           value="gemini" id="type_gemini">
+                                    <label class="form-check-label w-100" for="type_gemini">
+                                        <div class="model-type-card-small">
+                                            <i class="fab fa-google text-warning me-1"></i>
+                                            <small><strong>Gemini</strong><br>雲端模型</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 模型名稱 -->
+                    <div class="col-md-4">
+                        <label for="model_name" class="form-label fw-bold">
+                            <i class="fas fa-tag"></i> 模型名稱
+                        </label>
+                        <input type="text" class="form-control" name="model_name" 
+                               id="model_name" placeholder="為模型取個名字" required>
+                    </div>
+                    
+                    <!-- 溫度參數 -->
+                    <div class="col-md-2">
+                        <label for="temperature" class="form-label fw-bold">
+                            <i class="fas fa-thermometer-half"></i> 溫度
+                        </label>
+                        <input type="range" class="form-range" name="temperature" 
+                               id="temperature" min="0" max="2" step="0.1" value="0.7">
+                        <div class="text-center">
+                            <small id="tempValue">0.7</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ollama 模型配置 -->
+                <div id="ollamaConfig" class="model-config mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="ollama_model_select" class="form-label">選擇 Ollama 模型</label>
+                            <select class="form-select" id="ollama_model_select">
+                                <option value="">載入中...</option>
+                                {% for model in available_ollama_models %}
+                                <option value="{{ model }}">{{ model }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-text">
+                                <i class="fas fa-info-circle"></i> 
+                                如果看不到模型，請確認 Ollama 服務正在運行
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gemini 模型配置 -->
+                <div id="geminiConfig" class="model-config mb-3" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="gemini_api_key" class="form-label">
+                                <i class="fas fa-key"></i> API 金鑰
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="gemini_api_key" 
+                                       placeholder="Google AI Studio API 金鑰">
+                                <button class="btn btn-outline-secondary" type="button" 
+                                        onclick="togglePassword('gemini_api_key')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-info" type="button" onclick="testGeminiKey()">
+                                    <i class="fas fa-vial"></i> 測試
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="gemini_model_select" class="form-label">選擇 Gemini 模型</label>
+                            <select class="form-select" id="gemini_model_select" disabled>
+                                <option value="">請先測試 API 金鑰</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <div class="form-text">
+                                在 <a href="https://aistudio.google.com/app/apikey" target="_blank">
+                                Google AI Studio</a> 獲取免費的 API 金鑰
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 操作按鈕 -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <!-- 隱藏欄位 -->
+                        <input type="hidden" name="model_id" id="model_id">
+                        <input type="hidden" name="api_key" id="api_key">
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="submit" class="btn btn-success me-2" id="submitBtn" disabled>
+                            <i class="fas fa-save"></i> 新增模型
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="hideAddForm()">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 目前使用的模型 -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-star"></i> 目前預設模型
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if preference.default_model %}
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">{{ preference.default_model.name }}</h6>
+                        <small class="text-muted">
+                            {{ preference.default_model.get_model_type_display }} - {{ preference.default_model.model_id }}
+                        </small>
+                    </div>
+                    <div>
+                        {% if preference.default_model.is_available %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-check"></i> 可用
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-times"></i> 不可用
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="text-center text-muted">
+                    <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                    <p>尚未設定預設模型，請新增並設定一個模型</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- 已配置的模型列表 -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-list"></i> 已配置的模型
+                </h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" onclick="setViewMode('list')">
+                        <i class="fas fa-list"></i> 列表
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="setViewMode('grid')">
+                        <i class="fas fa-th"></i> 網格
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if user_models %}
+                <!-- 列表模式 -->
+                <div id="listView">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th>模型名稱</th>
+                                    <th>類型</th>
+                                    <th>模型ID</th>
+                                    <th style="width: 80px;">狀態</th>
+                                    <th style="width: 80px;">溫度</th>
+                                    <th style="width: 120px;">更新時間</th>
+                                    <th style="width: 150px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for model in user_models %}
+                                <tr>
+                                    <td class="text-muted">{{ forloop.counter }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if model == preference.default_model %}
+                                                <i class="fas fa-star text-warning me-2" title="預設模型"></i>
+                                            {% endif %}
+                                            <div>
+                                                <strong>{{ model.name }}</strong>
+                                                {% if model == preference.default_model %}
+                                                    <br><small class="text-warning">預設模型</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if model.model_type == 'ollama' %}
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-server"></i> Ollama
+                                            </span>
+                                        {% elif model.model_type == 'gemini' %}
+                                            <span class="badge bg-warning">
+                                                <i class="fab fa-google"></i> Gemini
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <code>{{ model.model_id }}</code>
+                                    </td>
+                                    <td>
+                                        {% if model.is_available %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check"></i> 可用
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-times"></i> 不可用
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ model.temperature }}</td>
+                                    <td class="text-muted">
+                                        {{ model.updated_at|date:"m/d H:i" }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="testModel({{ model.id }})" 
+                                                    title="測試連線">
+                                                <i class="fas fa-vial"></i>
+                                            </button>
+                                            
+                                            {% if model.is_available and model != preference.default_model %}
+                                            <a href="{% url 'set_default_model' model.id %}" 
+                                               class="btn btn-outline-warning" 
+                                               title="設為預設">
+                                                <i class="fas fa-star"></i>
+                                            </a>
+                                            {% endif %}
+                                            
+                                            <button class="btn btn-outline-primary" 
+                                                    onclick="editModel({{ model.id }})" 
+                                                    title="編輯">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            
+                                            <a href="{% url 'delete_model' model.id %}" 
+                                               class="btn btn-outline-danger" 
+                                               onclick="return confirm('確定要刪除模型「{{ model.name }}」嗎？')" 
+                                               title="刪除">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 網格模式（隱藏） -->
+                <div id="gridView" style="display: none;">
+                    <div class="row p-3">
+                        {% for model in user_models %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="card-title mb-0">
+                                            {% if model == preference.default_model %}
+                                                <i class="fas fa-star text-warning me-1"></i>
+                                            {% endif %}
+                                            {{ model.name }}
+                                        </h6>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="testModel({{ model.id }})">
+                                                    <i class="fas fa-vial"></i> 測試連線</a></li>
+                                                {% if model.is_available and model != preference.default_model %}
+                                                <li><a class="dropdown-item" href="{% url 'set_default_model' model.id %}">
+                                                    <i class="fas fa-star"></i> 設為預設</a></li>
+                                                {% endif %}
+                                                <li><a class="dropdown-item" href="#" onclick="editModel({{ model.id }})">
+                                                    <i class="fas fa-edit"></i> 編輯</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger" 
+                                                       href="{% url 'delete_model' model.id %}"
+                                                       onclick="return confirm('確定要刪除這個模型嗎？')">
+                                                    <i class="fas fa-trash"></i> 刪除</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <p class="card-text">
+                                        <span class="badge bg-light text-dark me-1">{{ model.get_model_type_display }}</span>
+                                        {% if model.is_available %}
+                                            <span class="badge bg-success">可用</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">不可用</span>
+                                        {% endif %}
+                                    </p>
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>{{ model.model_id }}</span>
+                                        <span>{{ model.updated_at|timesince }}前</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- 空狀態 -->
+                <div class="text-center py-5">
+                    <i class="fas fa-robot fa-4x text-muted mb-3"></i>
+                    <h5 class="text-muted">還沒有配置任何 AI 模型</h5>
+                    <p class="text-muted">點擊上方「新增模型」按鈕建立您的第一個 AI 模型</p>
+                    <button class="btn btn-success" onclick="showAddForm()">
+                        <i class="fas fa-plus"></i> 立即新增
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 訊息提示區域 -->
+<div id="messageArea" class="position-fixed" style="top: 20px; right: 20px; z-index: 1000;"></div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .model-type-card-small {
+        text-align: center;
+        padding: 10px;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.02);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-height: 60px;
+    }
+    
+    .form-check-input:checked + .form-check-label .model-type-card-small {
+        border-color: var(--bs-success);
+        background: rgba(var(--bs-success-rgb), 0.1);
+    }
+    
+    .model-type-card-small:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .model-config {
+        border-left: 4px solid var(--bs-info);
+        padding-left: 20px;
+        margin-left: 10px;
+        background: rgba(var(--bs-info-rgb), 0.05);
+        border-radius: 0 8px 8px 0;
+        padding: 15px 20px;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+    }
+    
+    .badge {
+        font-size: 0.8rem;
+    }
+    
+    code {
+        background: rgba(var(--bs-info-rgb), 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    
+    #addFormSection {
+        border-left: 4px solid #28a745;
+        animation: slideDown 0.3s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .message-alert {
+        animation: slideInRight 0.3s ease-out;
+        min-width: 300px;
+    }
+    
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    .table th {
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .form-range {
+        height: 6px;
+    }
+    
+    .form-range::-webkit-slider-thumb {
+        background: var(--bs-success);
+        border: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(40, 167, 69, 0.3);
+    }
+    
+    .form-range::-moz-range-thumb {
+        background: var(--bs-success);
+        border: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(40, 167, 69, 0.3);
+    }
+    
+    .card-header {
+        background-color: rgba(0, 123, 255, 0.05);
+        border-bottom: 1px solid rgba(0, 123, 255, 0.1);
+    }
+    
+    /* 響應式設計 */
+    @media (max-width: 768px) {
+        .model-type-card-small {
+            min-height: 50px;
+            padding: 8px;
+        }
+        
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .btn-group-sm .btn {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.7rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全域變數
+let currentViewMode = 'list';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const modelTypeRadios = document.querySelectorAll('input[name="model_type"]');
+    const temperatureSlider = document.getElementById('temperature');
+    const tempValue = document.getElementById('tempValue');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // 模型類型切換
+    modelTypeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            toggleModelConfig(this.value);
+            updateSubmitButton();
+        });
+    });
+    
+    // 溫度參數顯示
+    temperatureSlider.addEventListener('input', function() {
+        tempValue.textContent = this.value;
+    });
+    
+    // Ollama 模型選擇
+    document.getElementById('ollama_model_select').addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('model_id').value = this.value;
+            document.getElementById('model_name').value = `Ollama ${this.value}`;
+        }
+        updateSubmitButton();
+    });
+    
+    // Gemini 模型選擇
+    document.getElementById('gemini_model_select').addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('model_id').value = this.value;
+            document.getElementById('model_name').value = `Gemini ${this.value}`;
+        }
+        updateSubmitButton();
+    });
+    
+    // 模型名稱輸入監聽
+    document.getElementById('model_name').addEventListener('input', updateSubmitButton);
+    
+    // 初始化
+    toggleModelConfig('ollama');
+    updateSubmitButton();
+});
+
+// 顯示/隱藏新增表單
+function toggleAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    if (formSection.style.display === 'none') {
+        showAddForm();
+    } else {
+        hideAddForm();
+    }
+}
+
+function showAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    formSection.style.display = 'block';
+    toggleBtn.innerHTML = '<i class="fas fa-minus"></i> 收起';
+    toggleBtn.classList.remove('btn-success');
+    toggleBtn.classList.add('btn-warning');
+    
+    // 聚焦到名稱輸入框
+    setTimeout(() => {
+        document.getElementById('model_name').focus();
+    }, 300);
+    
+    // 滾動到表單
+    formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideAddForm() {
+    const formSection = document.getElementById('addFormSection');
+    const toggleBtn = document.getElementById('addToggleBtn');
+    
+    formSection.style.display = 'none';
+    toggleBtn.innerHTML = '<i class="fas fa-plus"></i> 新增模型';
+    toggleBtn.classList.remove('btn-warning');
+    toggleBtn.classList.add('btn-success');
+    
+    // 重置表單
+    document.getElementById('addModelForm').reset();
+    document.getElementById('model_id').value = '';
+    document.getElementById('api_key').value = '';
+    
+    // 重置配置顯示
+    toggleModelConfig('ollama');
+    document.getElementById('type_ollama').checked = true;
+    updateSubmitButton();
+}
+
+function toggleModelConfig(type) {
+    const ollamaConfig = document.getElementById('ollamaConfig');
+    const geminiConfig = document.getElementById('geminiConfig');
+    
+    if (type === 'ollama') {
+        ollamaConfig.style.display = 'block';
+        geminiConfig.style.display = 'none';
+        // 重置 Gemini 相關欄位
+        document.getElementById('gemini_api_key').value = '';
+        document.getElementById('api_key').value = '';
+    } else {
+        ollamaConfig.style.display = 'none';
+        geminiConfig.style.display = 'block';
+    }
+}
+
+function updateSubmitButton() {
+    const submitBtn = document.getElementById('submitBtn');
+    const modelType = document.querySelector('input[name="model_type"]:checked').value;
+    const modelName = document.getElementById('model_name').value;
+    const modelId = document.getElementById('model_id').value;
+    
+    let isValid = modelName.trim() && modelId.trim();
+    
+    if (modelType === 'gemini') {
+        const apiKey = document.getElementById('gemini_api_key').value;
+        isValid = isValid && apiKey.trim();
+    }
+    
+    submitBtn.disabled = !isValid;
+    
+    if (isValid) {
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> 新增模型';
+        submitBtn.classList.remove('btn-secondary');
+        submitBtn.classList.add('btn-success');
+    } else {
+        submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 請完成所有設定';
+        submitBtn.classList.remove('btn-success');
+        submitBtn.classList.add('btn-secondary');
+    }
+}
+
+// 切換檢視模式
+function setViewMode(mode) {
+    const listView = document.getElementById('listView');
+    const gridView = document.getElementById('gridView');
+    const buttons = document.querySelectorAll('[onclick^="setViewMode"]');
+    
+    // 更新按鈕狀態
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    if (mode === 'list') {
+        listView.style.display = 'block';
+        gridView.style.display = 'none';
+    } else {
+        listView.style.display = 'none';
+        gridView.style.display = 'block';
+    }
+    
+    currentViewMode = mode;
+}
+
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const icon = event.target.closest('button').querySelector('i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+async function testGeminiKey() {
+    const apiKey = document.getElementById('gemini_api_key').value;
+    if (!apiKey.trim()) {
+        showMessage('請先輸入 API 金鑰', 'error');
+        return;
+    }
+    
+    const testBtn = event.target;
+    const originalText = testBtn.innerHTML;
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 測試中...';
+    testBtn.disabled = true;
+    
+    try {
+        const response = await fetch('{% url "fetch_gemini_models" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showMessage('API 金鑰驗證成功！', 'success');
+            
+            // 填充模型選擇框
+            const modelSelect = document.getElementById('gemini_model_select');
+            modelSelect.innerHTML = '<option value="">請選擇模型</option>';
+            result.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
+            });
+            modelSelect.disabled = false;
+            
+            // 設定隱藏欄位
+            document.getElementById('api_key').value = apiKey;
+            
+        } else {
+            showMessage(result.message, 'error');
+        }
+        
+    } catch (error) {
+        showMessage('測試失敗：' + error.message, 'error');
+    } finally {
+        testBtn.innerHTML = originalText;
+        testBtn.disabled = false;
+    }
+}
+
+async function testModel(modelId) {
+    const testBtn = event.target.closest('button');
+    const originalText = testBtn.innerHTML;
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    testBtn.disabled = true;
+    
+    try {
+        const response = await fetch(`/model/${modelId}/test/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showMessage(`${result.model_name} 連線測試成功！`, 'success');
+            // 重新載入頁面以更新狀態
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showMessage(`${result.model_name} 連線測試失敗：${result.message}`, 'error');
+        }
+        
+    } catch (error) {
+        showMessage('測試失敗：' + error.message, 'error');
+    } finally {
+        testBtn.innerHTML = originalText;
+        testBtn.disabled = false;
+    }
+}
+
+function refreshModels() {
+    location.reload();
+}
+
+function showMessage(message, type) {
+    const messageArea = document.getElementById('messageArea');
+    const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'info': 'alert-info',
+        'warning': 'alert-warning'
+    };
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass[type]} alert-dismissible fade show message-alert`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    
+    messageArea.appendChild(alert);
+    
+    // 5秒後自動移除
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+function editModel(modelId) {
+    // TODO: 實作編輯模型功能
+    showMessage('編輯功能開發中', 'info');
+}
+
+// 表單提交處理
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('addModelForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const modelName = document.getElementById('model_name').value;
+            const modelType = document.querySelector('input[name="model_type"]:checked').value;
+            
+            submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> 新增 ${modelName} 中...`;
+            submitBtn.disabled = true;
+            
+            showMessage(`正在新增模型 ${modelName}，請稍候...`, 'info');
+        });
+    }
+});
+
+console.log('模型管理頁面已載入 - 內嵌式版本');
+</script>
+{% endblock %}

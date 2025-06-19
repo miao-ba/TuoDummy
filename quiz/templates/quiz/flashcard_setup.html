@@ -96,29 +96,29 @@
                         </div>
                     </div>
                     
-                    <!-- 題目數量 -->
+                    <!-- 閃卡數量 - 改用滑桿方式 -->
                     <div class="mb-4">
                         <label class="form-label fw-bold">
                             <i class="fas fa-hashtag text-info"></i> 閃卡數量
                         </label>
-                        <div class="quantity-selector">
-                            {% for count in "5,10,15,20"|make_list %}
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" 
-                                       name="total_questions" value="{{ count }}" 
-                                       id="count_{{ count }}" {% if count == "10" %}checked{% endif %}>
-                                <label class="form-check-label" for="count_{{ count }}">
-                                    <div class="quantity-card">
-                                        <div class="quantity-number">{{ count }}</div>
-                                        <small class="text-muted">張</small>
-                                    </div>
-                                </label>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="range" class="form-range" name="total_questions" 
+                                       min="5" max="30" value="10" id="flashcardRange" step="5">
                             </div>
-                            {% endfor %}
+                            <div class="col-md-4">
+                                <input type="number" class="form-control" id="flashcardNumber" 
+                                       min="5" max="30" value="10" step="5" readonly>
+                            </div>
                         </div>
-                        <small class="form-text text-muted">
+                        <div class="d-flex justify-content-between text-muted small mt-1">
+                            <span>5 張</span>
+                            <span>15 張</span>
+                            <span>30 張</span>
+                        </div>
+                        <small class="form-text text-muted" id="timeEstimate">
                             <i class="fas fa-clock"></i> 
-                            預估時間：5張約1分鐘，10張約2分鐘，20張約4分鐘
+                            預估時間：10張約2分鐘 | 建議在休息時間進行
                         </small>
                     </div>
                     
@@ -247,42 +247,6 @@
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     }
     
-    .quantity-card {
-        display: inline-block;
-        padding: 15px 20px;
-        border: 2px solid transparent;
-        border-radius: 50px;
-        background: rgba(0, 0, 0, 0.02);
-        transition: all 0.3s ease;
-        cursor: pointer;
-        min-width: 80px;
-    }
-    
-    .quantity-number {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #0dcaf0;
-    }
-    
-    .form-check-input:checked + .form-check-label .quantity-card {
-        border-color: #0dcaf0;
-        background: rgba(13, 202, 240, 0.1);
-        transform: scale(1.1);
-    }
-    
-    .quantity-card:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 10px rgba(13, 202, 240, 0.3);
-    }
-    
-    .quantity-selector {
-        display: flex;
-        justify-content: space-around;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 10px;
-    }
-    
     .stat-item {
         padding: 10px;
     }
@@ -303,22 +267,37 @@
         box-shadow: 0 6px 20px rgba(13, 202, 240, 0.4);
     }
     
+    .form-range {
+        height: 8px;
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        border-radius: 4px;
+    }
+    
+    .form-range::-webkit-slider-thumb {
+        background: linear-gradient(135deg, #0dcaf0 0%, #0077be 100%);
+        border: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(13, 202, 240, 0.3);
+    }
+    
+    .form-range::-moz-range-thumb {
+        background: linear-gradient(135deg, #0dcaf0 0%, #0077be 100%);
+        border: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(13, 202, 240, 0.3);
+    }
+    
     @media (max-width: 768px) {
-        .quantity-selector {
-            justify-content: center;
-        }
-        
         .knowledge-card {
             margin-bottom: 10px;
         }
         
-        .quantity-card {
-            min-width: 60px;
-            padding: 10px 15px;
-        }
-        
-        .quantity-number {
-            font-size: 1.2rem;
+        .difficulty-card {
+            margin-bottom: 10px;
         }
     }
 </style>
@@ -329,14 +308,40 @@
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('flashcardForm');
     const submitBtn = document.getElementById('submitBtn');
+    const flashcardRange = document.getElementById('flashcardRange');
+    const flashcardNumber = document.getElementById('flashcardNumber');
+    const timeEstimate = document.getElementById('timeEstimate');
+    
+    // 同步滑桿和數字輸入
+    flashcardRange.addEventListener('input', function() {
+        flashcardNumber.value = this.value;
+        updateTimeEstimate();
+        updateSubmitButton();
+    });
+    
+    flashcardNumber.addEventListener('input', function() {
+        flashcardRange.value = this.value;
+        updateTimeEstimate();
+        updateSubmitButton();
+    });
+    
+    // 更新時間預估
+    function updateTimeEstimate() {
+        const count = parseInt(flashcardNumber.value);
+        const timeMinutes = Math.ceil(count / 5); // 每5張約1分鐘
+        
+        timeEstimate.innerHTML = `
+            <i class="fas fa-clock"></i> 
+            預估時間：${count}張約${timeMinutes}分鐘 | 建議在休息時間進行
+        `;
+    }
     
     // 檢查表單完整性
     function updateSubmitButton() {
         const knowledgeBases = document.querySelectorAll('input[name="knowledge_bases"]:checked');
         const difficulty = document.querySelector('input[name="difficulty"]:checked');
-        const totalQuestions = document.querySelector('input[name="total_questions"]:checked');
         
-        const isValid = knowledgeBases.length > 0 && difficulty && totalQuestions;
+        const isValid = knowledgeBases.length > 0 && difficulty;
         
         submitBtn.disabled = !isValid;
         
@@ -358,6 +363,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始檢查
     updateSubmitButton();
+    updateTimeEstimate();
     
     // 表單提交處理
     form.addEventListener('submit', function(e) {
@@ -380,29 +386,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const radio = this.parentElement.querySelector('input[type="radio"]');
             radio.checked = true;
             updateSubmitButton();
-        });
-    });
-    
-    // 數量卡片點擊效果
-    document.querySelectorAll('.quantity-card').forEach(card => {
-        card.addEventListener('click', function() {
-            const radio = this.parentElement.querySelector('input[type="radio"]');
-            radio.checked = true;
-            updateSubmitButton();
-        });
-    });
-    
-    // 預估時間更新
-    document.querySelectorAll('input[name="total_questions"]').forEach(input => {
-        input.addEventListener('change', function() {
-            const count = parseInt(this.value);
-            const timeEstimate = Math.ceil(count / 5); // 每5題約1分鐘
-            
-            const timeText = document.querySelector('.form-text');
-            timeText.innerHTML = `
-                <i class="fas fa-clock"></i> 
-                預估時間：${count}張約${timeEstimate}分鐘 | 建議在休息時間進行
-            `;
         });
     });
 });

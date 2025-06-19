@@ -45,6 +45,43 @@
                         {% endif %}
                     </div>
                     
+                    <!-- AI 模型選擇 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-robot text-secondary"></i> AI 模型
+                        </label>
+                        {% if available_models %}
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <select name="ai_model" class="form-select">
+                                        <option value="">使用預設模型{% if default_model %} ({{ default_model.name }}){% endif %}</option>
+                                        {% for model in available_models %}
+                                        <option value="{{ model.id }}" {% if model == default_model %}selected{% endif %}>
+                                            {{ model.name }} - {{ model.get_model_type_display }}
+                                            {% if model == default_model %} (預設){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a href="{% url 'model_management' %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-cog"></i> 管理模型
+                                    </a>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                選擇不同的 AI 模型可能會產生不同風格的題目
+                            </small>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                尚未設定任何 AI 模型，將使用系統預設模型。
+                                <br><a href="{% url 'model_management' %}" class="alert-link">前往設定 AI 模型</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
                     <!-- 題目類型 -->
                     <div class="mb-4">
                         <label class="form-label fw-bold">
@@ -121,6 +158,7 @@
                 <ul class="list-unstyled mb-0">
                     <li><i class="fas fa-check text-success"></i> 選擇一個或多個知識庫作為題目來源</li>
                     <li><i class="fas fa-check text-success"></i> 選擇您想要的題目類型組合</li>
+                    <li><i class="fas fa-check text-success"></i> 可以選擇不同的 AI 模型來生成題目</li>
                     <li><i class="fas fa-check text-success"></i> 系統將根據您的設定生成個性化題目</li>
                     <li><i class="fas fa-check text-success"></i> 大於 10 題的設定將分批生成避免重複</li>
                 </ul>
@@ -173,7 +211,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 表單提交處理
     form.addEventListener('submit', function(e) {
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成題目中...';
+        const selectedModel = document.querySelector('select[name="ai_model"]').value;
+        const modelText = selectedModel ? 
+            document.querySelector(`select[name="ai_model"] option[value="${selectedModel}"]`).textContent :
+            '預設模型';
+        
+        submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> 使用 ${modelText} 生成題目中...`;
         submitBtn.disabled = true;
     });
 });

@@ -15,6 +15,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 100px; /* 增加底部間距避免被 footer 遮蓋 */
         }
         
         .main-container {
@@ -22,7 +23,7 @@
             border-radius: 15px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
-            margin: 20px auto;
+            margin: 20px auto 120px auto; /* 底部增加更多邊距 */
             max-width: 800px;
         }
         
@@ -65,8 +66,9 @@
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-top: 1px solid rgba(0, 0, 0, 0.1);
-            padding: 10px 0;
+            padding: 15px 0; /* 增加內邊距 */
             z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); /* 添加陰影 */
         }
         
         .bottom-nav .nav-item {
@@ -81,6 +83,7 @@
             padding: 8px;
             border-radius: 10px;
             transition: all 0.3s ease;
+            display: block;
         }
         
         .bottom-nav .nav-link.active,
@@ -90,7 +93,8 @@
         }
         
         .content-wrapper {
-            padding-bottom: 80px; /* 為底部導航留空間 */
+            padding: 20px;
+            padding-bottom: 40px; /* 增加底部內邊距 */
         }
         
         .form-control, .form-select {
@@ -152,13 +156,26 @@
         }
         
         @media (max-width: 768px) {
+            body {
+                padding-bottom: 120px; /* 手機版增加更多底部間距 */
+            }
+            
             .main-container {
-                margin: 10px;
+                margin: 10px 10px 140px 10px; /* 手機版調整邊距 */
                 border-radius: 0;
             }
             
             .navbar-custom {
                 border-radius: 0;
+            }
+            
+            .bottom-nav {
+                padding: 20px 0; /* 手機版增加更多內邊距 */
+            }
+            
+            .content-wrapper {
+                padding: 15px;
+                padding-bottom: 50px;
             }
         }
     </style>
@@ -182,7 +199,7 @@
         </nav>
         
         <!-- 主要內容 -->
-        <div class="content-wrapper p-4">
+        <div class="content-wrapper">
             <!-- 訊息顯示 -->
             {% if messages %}
                 {% for message in messages %}
@@ -211,6 +228,12 @@
                     <a href="{% url 'knowledge_base_list' %}" class="nav-link {% if 'knowledge' in request.resolver_match.url_name %}active{% endif %}">
                         <i class="fas fa-book d-block"></i>
                         知識庫
+                    </a>
+                </div>
+                <div class="col nav-item">
+                    <a href="{% url 'model_management' %}" class="nav-link {% if 'model' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-robot d-block"></i>
+                        AI模型
                     </a>
                 </div>
                 <div class="col nav-item">

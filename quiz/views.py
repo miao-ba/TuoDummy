@@ -9,7 +9,9 @@ import math
 from .models import *
 from .utils import *
 from .rag_utils import *
-
+import requests
+from django.views.decorators.http import require_http_methods
+from .models import AIModel, UserModelPreference
 def health_check(request):
     """健康檢查端點"""
     return HttpResponse("OK", content_type="text/plain")
@@ -65,7 +67,7 @@ def custom_quiz_setup(request):
         
         # 生成題目
         try:
-            generate_quiz_questions(session)
+            generate_questions_with_model(session)
             return redirect('quiz_interface', session_id=session.id)
         except Exception as e:
             messages.error(request, f'題目生成失敗：{str(e)}')
@@ -107,7 +109,7 @@ def flashcard_setup(request):
         session.knowledge_bases.set(knowledge_base_ids)
         
         try:
-            generate_quiz_questions(session)
+            generate_questions_with_model(session)
             return redirect('flashcard_interface', session_id=session.id)
         except Exception as e:
             messages.error(request, f'閃卡生成失敗：{str(e)}')
@@ -149,8 +151,317 @@ def flashcard_setup(request):
     }
     return render(request, 'quiz/flashcard_setup.html', context)
 
-def generate_quiz_questions(session):
-    """生成答題題目"""
+class OllamaClient:
+    """Ollama 客戶端"""
+    
+    def __init__(self, base_url="http://localhost:11434"):
+        self.base_url = base_url
+    
+    def get_models(self):
+        """獲取可用的模型清單"""
+        try:
+            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                return [model['name'] for model in data.get('models', [])]
+            else:
+                print(f"Ollama API 回應錯誤: {response.status_code}")
+                return []
+        except requests.exceptions.ConnectionError:
+            print("無法連接到 Ollama 服務，請確認服務是否運行")
+            return []
+        except requests.exceptions.Timeout:
+            print("Ollama API 回應超時")
+            return []
+        except Exception as e:
+            print(f"獲取 Ollama 模型清單時發生錯誤: {e}")
+            return []
+    
+    def test_model(self, model_name):
+        """測試模型是否可用"""
+        try:
+            payload = {
+                "model": model_name,
+                "prompt": "test",
+                "stream": False
+            }
+            response = requests.post(
+                f"{self.base_url}/api/generate", 
+                json=payload, 
+                timeout=30
+            )
+            return response.status_code == 200
+        except Exception as e:
+            print(f"測試 Ollama 模型 {model_name} 時發生錯誤: {e}")
+            return False
+
+@login_required
+def model_management(request):
+    """模型管理頁面"""
+    user_models = AIModel.objects.filter(user=request.user)
+    
+    # 獲取使用者偏好
+    preference, created = UserModelPreference.objects.get_or_create(user=request.user)
+    
+    # 獲取可用的 Ollama 模型
+    ollama_client = OllamaClient()
+    available_ollama_models = ollama_client.get_models()
+    
+    context = {
+        'user_models': user_models,
+        'preference': preference,
+        'available_ollama_models': available_ollama_models,
+    }
+    return render(request, 'quiz/model_management.html', context)
+
+@login_required
+@require_http_methods(["POST"])
+def add_model(request):
+    """新增模型"""
+    model_type = request.POST.get('model_type')
+    model_name = request.POST.get('model_name')
+    model_id = request.POST.get('model_id')
+    api_key = request.POST.get('api_key', '')
+    base_url = request.POST.get('base_url', '')
+    temperature = float(request.POST.get('temperature', 0.7))
+    
+    try:
+        # 檢查模型是否已存在
+        if AIModel.objects.filter(
+            user=request.user, 
+            model_id=model_id, 
+            model_type=model_type
+        ).exists():
+            messages.error(request, f'模型 {model_id} 已存在')
+            return redirect('model_management')
+        
+        # 設定預設 base_url
+        if model_type == 'ollama' and not base_url:
+            base_url = "http://localhost:11434"
+        
+        # 建立模型
+        model = AIModel.objects.create(
+            user=request.user,
+            name=model_name,
+            model_type=model_type,
+            model_id=model_id,
+            api_key=api_key if api_key else None,
+            base_url=base_url if base_url else None,
+            temperature=temperature
+        )
+        
+        # 測試連線
+        success, message = model.test_connection()
+        model.is_available = success
+        model.save()
+        
+        if success:
+            messages.success(request, f'模型 {model_name} 新增成功並測試通過')
+            
+            # 如果是第一個可用模型，設為預設
+            preference, created = UserModelPreference.objects.get_or_create(user=request.user)
+            if not preference.default_model:
+                preference.default_model = model
+                preference.save()
+                messages.info(request, f'已將 {model_name} 設為預設模型')
+        else:
+            messages.warning(request, f'模型 {model_name} 新增成功但連線測試失敗: {message}')
+            
+    except Exception as e:
+        messages.error(request, f'新增模型失敗: {str(e)}')
+    
+    return redirect('model_management')
+
+@login_required
+@csrf_exempt
+def test_model_connection(request, model_id):
+    """測試模型連線 API"""
+    if request.method != 'POST':
+        return JsonResponse({'error': '無效的請求方法'}, status=405)
+    
+    try:
+        model = get_object_or_404(AIModel, id=model_id, user=request.user)
+        success, message = model.test_connection()
+        
+        # 更新可用狀態
+        model.is_available = success
+        model.save()
+        
+        return JsonResponse({
+            'success': success,
+            'message': message,
+            'model_name': model.name
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+@login_required
+def set_default_model(request, model_id):
+    """設定預設模型"""
+    try:
+        model = get_object_or_404(AIModel, id=model_id, user=request.user)
+        
+        if not model.is_available:
+            messages.error(request, '無法將不可用的模型設為預設')
+            return redirect('model_management')
+        
+        preference, created = UserModelPreference.objects.get_or_create(user=request.user)
+        preference.default_model = model
+        preference.save()
+        
+        messages.success(request, f'已將 {model.name} 設為預設模型')
+        
+    except Exception as e:
+        messages.error(request, f'設定預設模型失敗: {str(e)}')
+    
+    return redirect('model_management')
+
+@login_required
+def delete_model(request, model_id):
+    """刪除模型"""
+    try:
+        model = get_object_or_404(AIModel, id=model_id, user=request.user)
+        model_name = model.name
+        
+        # 如果是預設模型，清除預設設定
+        preference = UserModelPreference.objects.filter(user=request.user).first()
+        if preference and preference.default_model == model:
+            preference.default_model = None
+            preference.save()
+            messages.info(request, '已清除預設模型設定')
+        
+        model.delete()
+        messages.success(request, f'已刪除模型 {model_name}')
+        
+    except Exception as e:
+        messages.error(request, f'刪除模型失敗: {str(e)}')
+    
+    return redirect('model_management')
+
+@csrf_exempt
+def get_available_ollama_models():
+    """獲取可用的 Ollama 模型（使用新的方式）"""
+    ollama_client = OllamaClient()
+    return ollama_client.get_models()
+
+@login_required
+@csrf_exempt
+def fetch_ollama_models_api(request):
+    """獲取 Ollama 模型 API"""
+    if request.method != 'POST':
+        return JsonResponse({'error': '無效的請求方法'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        base_url = data.get('base_url', 'http://localhost:11434')
+        
+        ollama_client = OllamaClient(base_url)
+        models = ollama_client.get_models()
+        
+        if models:
+            return JsonResponse({
+                'success': True,
+                'models': models,
+                'message': f'成功獲取 {len(models)} 個模型'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'Ollama 服務未運行或沒有可用模型'
+            })
+            
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '無效的 JSON 格式'}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+@login_required
+@csrf_exempt
+def fetch_gemini_models(request):
+    """獲取 Gemini 可用模型 API"""
+    if request.method != 'POST':
+        return JsonResponse({'error': '無效的請求方法'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        api_key = data.get('api_key')
+        
+        if not api_key:
+            return JsonResponse({'error': '缺少 API 金鑰'}, status=400)
+        
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        
+        # 嘗試獲取模型列表
+        try:
+            # 使用常見的 Gemini 模型列表，因為API可能不提供模型列表
+            common_models = [
+                'gemini-1.5-flash',
+                'gemini-1.5-pro',
+                'gemini-2.0-flash-exp',
+                'gemini-1.5-flash-8b'
+            ]
+            
+            # 測試第一個模型來驗證 API 金鑰
+            test_response = client.models.generate_content(
+                model=common_models[0],
+                contents="test"
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'models': common_models,
+                'message': 'API 金鑰驗證成功'
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'API 金鑰驗證失敗: {str(e)}'
+            }, status=400)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '無效的 JSON 格式'}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+# 修改現有的題目生成函數以支援模型選擇
+def get_user_default_model(user):
+    """獲取使用者的預設模型"""
+    try:
+        preference = UserModelPreference.objects.get(user=user)
+        if preference.default_model and preference.default_model.is_available:
+            return preference.default_model
+    except UserModelPreference.DoesNotExist:
+        pass
+    
+    # 如果沒有預設模型，返回第一個可用的模型
+    available_model = AIModel.objects.filter(
+        user=user, 
+        is_available=True
+    ).first()
+    
+    return available_model
+
+def generate_questions_with_model(session, model=None):
+    """使用指定模型生成題目"""
+    if not model:
+        model = get_user_default_model(session.user)
+        
+    if not model:
+        # 如果沒有可用的模型，使用傳統方式
+        return generate_quiz_questions_fallback(session)
+    
     # 獲取相關內容
     kb_ids = list(session.knowledge_bases.values_list('id', flat=True))
     content = get_relevant_content(kb_ids, session.question_types)
@@ -158,16 +469,16 @@ def generate_quiz_questions(session):
     if not content:
         raise Exception("無法找到相關內容")
     
-    # 獲取歷史題目
-    history_data = get_history_questions(session.user, kb_ids)
-    history_text = json.dumps(history_data) if history_data else None
+    print(f"使用模型 {model.name} 生成 {session.total_questions} 個題目")
     
-    # 分批生成題目（每次最多10題）
+    # 批量生成題目
     questions = []
     remaining = session.total_questions
+    temp_history = []
     
     while remaining > 0:
         batch_size = min(remaining, 10)
+        print(f"生成批次：{batch_size} 題，剩餘：{remaining} 題")
         
         # 生成提示詞
         prompt = generate_prompt(
@@ -175,31 +486,94 @@ def generate_quiz_questions(session):
             question_types=session.question_types,
             difficulty=session.difficulty,
             content=content,
-            history=history_text
+            history=temp_history
         )
         
-        # 呼叫 LLM 生成
-        response = generate_questions_ollama(prompt)
-        batch_questions = parse_questions(response)
-        
-        questions.extend(batch_questions)
-        remaining -= len(batch_questions)
-        
-        # 更新歷史記錄避免重複
-        if history_text:
-            history_text += json.dumps(batch_questions)
-        else:
-            history_text = json.dumps(batch_questions)
+        try:
+            # 使用指定模型生成
+            response = model.generate_content(prompt)
+            batch_questions = parse_questions(response)
+            
+            if not batch_questions:
+                raise Exception("本批次無法生成有效題目")
+            
+            print(f"本批次生成 {len(batch_questions)} 個題目")
+            
+            questions.extend(batch_questions)
+            temp_history.extend([{
+                'question_text': q['question_text'],
+                'question_type': q['question_type']
+            } for q in batch_questions])
+            
+            remaining -= len(batch_questions)
+            
+            if len(temp_history) > 20:
+                temp_history = temp_history[-20:]
+                
+        except Exception as e:
+            print(f"批次生成失敗：{str(e)}")
+            if batch_size > 1:
+                batch_size = max(1, batch_size // 2)
+                continue
+            else:
+                raise Exception(f"使用模型 {model.name} 生成題目失敗: {str(e)}")
     
-    # 儲存題目到會話
-    session.questions_data = questions[:session.total_questions]
+    # 儲存題目
+    final_questions = questions[:session.total_questions]
+    session.questions_data = final_questions
     session.save()
     
-    # 儲存到歷史記錄
-    save_history_questions(session.user, kb_ids, questions)
+    print(f"使用 {model.name} 成功生成 {len(final_questions)} 個題目")
+    
+    return final_questions
 
+def generate_quiz_questions_fallback(session):
+    """備用的題目生成方式（當沒有可用模型時）"""
+    # 使用原來的 ollama 客戶端方式
+    from ollama import chat, ChatResponse
+    
+    # 獲取相關內容
+    kb_ids = list(session.knowledge_bases.values_list('id', flat=True))
+    content = get_relevant_content(kb_ids, session.question_types)
+    
+    if not content:
+        raise Exception("無法找到相關內容")
+    
+    print(f"使用備用方式生成 {session.total_questions} 個題目")
+    
+    # 生成提示詞
+    prompt = generate_prompt(
+        count=session.total_questions,
+        question_types=session.question_types,
+        difficulty=session.difficulty,
+        content=content
+    )
+    
+    try:
+        # 使用 ollama 客戶端
+        response: ChatResponse = chat(
+            model="gemma3:4b",  # 預設模型
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0.7}
+        )
+        
+        questions = parse_questions(response['message']['content'])
+        
+        if not questions:
+            raise Exception("無法生成有效題目")
+        
+        # 儲存題目
+        session.questions_data = questions[:session.total_questions]
+        session.save()
+        
+        print(f"備用方式成功生成 {len(session.questions_data)} 個題目")
+        
+    except Exception as e:
+        raise Exception(f"備用方式生成題目失敗: {str(e)}")
+    
+    return session.questions_data
 def save_history_questions(user, knowledge_base_ids, questions):
-    """儲存歷史題目"""
+    """儲存歷史題目（用於統計，不影響生成邏輯）"""
     kb_ids_str = ','.join(map(str, sorted(knowledge_base_ids)))
     
     for question in questions:
@@ -277,9 +651,18 @@ def flashcard_interface(request, session_id):
     """閃卡介面"""
     session = get_object_or_404(QuizSession, id=session_id, user=request.user)
     
+    if session.is_completed:
+        return redirect('quiz_result', session_id=session.id)
+    
+    # 檢查題目資料是否存在
+    if not session.questions_data:
+        messages.error(request, '找不到題目資料，請重新生成')
+        return redirect('flashcard_setup')
+    
     context = {
         'session': session,
-        'questions': session.questions_data
+        'questions': session.questions_data,  # 直接傳遞原始資料，讓模板處理
+        'questions_json': json.dumps(session.questions_data, ensure_ascii=False)  # 額外提供 JSON 字串
     }
     return render(request, 'quiz/flashcard.html', context)
 
@@ -291,12 +674,16 @@ def flashcard_answer(request, session_id):
         return JsonResponse({'error': '無效請求'}, status=400)
     
     session = get_object_or_404(QuizSession, id=session_id, user=request.user)
-    data = json.loads(request.body)
+    
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '無效的 JSON 格式'}, status=400)
     
     question_index = data.get('question_index')
     user_answer = data.get('answer')
     
-    if question_index >= len(session.questions_data):
+    if question_index is None or question_index >= len(session.questions_data):
         return JsonResponse({'error': '題目不存在'}, status=400)
     
     question = session.questions_data[question_index]
@@ -330,7 +717,6 @@ def flashcard_answer(request, session_id):
         'explanation': question.get('explanation', ''),
         'completed': session.is_completed
     })
-
 @login_required
 def quiz_result(request, session_id):
     """答題結果"""

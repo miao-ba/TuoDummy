@@ -93,3 +93,131 @@ class HistoryQuestion(models.Model):
         indexes = [
             models.Index(fields=['user', 'knowledge_base_ids']),
         ]
+class AIModel(models.Model):
+    """AI 模型配置"""
+    MODEL_TYPES = [
+        ('ollama', 'Ollama 本地模型'),
+        ('gemini', 'Google Gemini'),
+    ]
+    
+    name = models.CharField(max_length=100, verbose_name="模型名稱")
+    model_type = models.CharField(max_length=20, choices=MODEL_TYPES, verbose_name="模型類型")
+    model_id = models.CharField(max_length=100, verbose_name="模型ID")
+    api_key = models.TextField(blank=True, null=True, verbose_name="API金鑰")
+    base_url = models.URLField(blank=True, null=True, default="http://localhost:11434", verbose_name="基礎URL")
+    is_active = models.BooleanField(default=True, verbose_name="是否啟用")
+    is_available = models.BooleanField(default=False, verbose_name="是否可用")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="使用者")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="建立時間")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新時間")
+    
+    # 模型參數配置
+    temperature = models.FloatField(default=0.7, verbose_name="溫度參數")
+    max_tokens = models.IntegerField(default=4000, verbose_name="最大輸出長度")
+    
+    class Meta:
+        verbose_name = "AI模型"
+        verbose_name_plural = "AI模型"
+        unique_together = ['user', 'model_id', 'model_type']
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_model_type_display()})"
+    
+    def test_connection(self):
+        """測試模型連線"""
+        try:
+            if self.model_type == 'ollama':
+                return self._test_ollama_connection()
+            elif self.model_type == 'gemini':
+                return self._test_gemini_connection()
+            return False, "不支援的模型類型"
+        except Exception as e:
+            return False, str(e)
+    
+    def _test_ollama_connection(self):
+        """測試 Ollama 連線"""
+        try:
+            from ollama import chat
+            
+            response = chat(
+                model=self.model_id,
+                messages=[{'role': 'user', 'content': 'test'}],
+                options={'temperature': 0.1}
+            )
+            return True, "連線成功"
+        except Exception as e:
+            return False, f"Ollama 連線失敗: {str(e)}"
+    
+    def _test_gemini_connection(self):
+        """測試 Gemini 連線"""
+        try:
+            from google import genai
+            
+            if not self.api_key:
+                return False, "缺少 API 金鑰"
+            
+            client = genai.Client(api_key=self.api_key)
+            response = client.models.generate_content(
+                model=self.model_id,
+                contents="test"
+            )
+            return True, "連線成功"
+        except Exception as e:
+            return False, f"Gemini 連線失敗: {str(e)}"
+    
+    def generate_content(self, prompt):
+        """生成內容"""
+        if self.model_type == 'ollama':
+            return self._generate_with_ollama(prompt)
+        elif self.model_type == 'gemini':
+            return self._generate_with_gemini(prompt)
+        else:
+            raise ValueError("不支援的模型類型")
+    
+    def _generate_with_ollama(self, prompt):
+        """使用 Ollama 生成內容"""
+        from ollama import chat
+        
+        response = chat(
+            model=self.model_id,
+            messages=[{'role': 'user', 'content': prompt}],
+            options={
+                'temperature': self.temperature,
+                'max_tokens': self.max_tokens
+            }
+        )
+        return response['message']['content']
+    
+    def _generate_with_gemini(self, prompt):
+        """使用 Gemini 生成內容"""
+        from google import genai
+        
+        if not self.api_key:
+            raise ValueError("缺少 API 金鑰")
+        
+        client = genai.Client(api_key=self.api_key)
+        response = client.models.generate_content(
+            model=self.model_id,
+            contents=prompt
+        )
+        return response.text
+
+class UserModelPreference(models.Model):
+    """使用者模型偏好設定"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name="使用者")
+    default_model = models.ForeignKey(
+        AIModel, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name="預設模型"
+    )
+    auto_detect_models = models.BooleanField(default=True, verbose_name="自動偵測可用模型")
+    
+    class Meta:
+        verbose_name = "使用者模型偏好"
+        verbose_name_plural = "使用者模型偏好"
+
+    def __str__(self):
+        return f"{self.user.username} 的模型偏好"

@@ -23,4 +23,12 @@ urlpatterns = [
     
     # 使用者
     path('profile/', views.user_profile, name='user_profile'),
+    
+    # 模型管理
+    path('models/', views.model_management, name='model_management'),
+    path('models/add/', views.add_model, name='add_model'),
+    path('model/<int:model_id>/test/', views.test_model_connection, name='test_model_connection'),
+    path('model/<int:model_id>/default/', views.set_default_model, name='set_default_model'),
+    path('model/<int:model_id>/delete/', views.delete_model, name='delete_model'),
+    path('api/gemini/models/', views.fetch_gemini_models, name='fetch_gemini_models'),
 ]
